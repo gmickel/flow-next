@@ -233,6 +233,22 @@ class AuditScanBatchingTest(MemoryRepoTemplate, unittest.TestCase):
         self.assertEqual(rows[moved]["recurrence"]["commits"], 2)
         self.assertEqual(rows[e2["entry_id"]]["recurrence"]["commits"], 1)
 
+    def test_extract_substantive_commits_strips_git_tab_for_spaced_paths(self) -> None:
+        import re
+        audit_meta_re = re.compile(r"^(?:last_audited|audit_count):")
+        spaced = ".flow/memory/bug/runtime-errors/my spaced entry.md"
+        lines = [
+            "COMMIT deadbeef",
+            f"diff --git a/{spaced} b/{spaced}",
+            f"--- a/{spaced}\t",
+            f"+++ b/{spaced}\t",
+            "+Substantive lesson line",
+        ]
+        commits_by_path, _ = flowctl._extract_substantive_commits(
+            lines, audit_meta_re, by_path=True
+        )
+        self.assertEqual(commits_by_path.get(spaced), {"deadbeef"})
+
     def test_dot_prefixed_module_and_untracked_nested_file_and_apply_null_delete(self) -> None:
         (self.root / ".github" / "workflows").mkdir(parents=True)
         (self.root / ".github" / "workflows" / "ci.yml").write_text("name: ci\n", encoding="utf-8")

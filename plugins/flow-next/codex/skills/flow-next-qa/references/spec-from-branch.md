@@ -11,7 +11,7 @@ if [[ -z "$SPEC_ID" ]]; then
   if [[ -n "$CURRENT_BRANCH" ]]; then
     SPEC_ID=$(
       find "$REPO_ROOT/.flow/specs" "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' \
-        -exec jq -r --arg b "$CURRENT_BRANCH" 'select(.branch_name == $b) | .id' {} + 2>/dev/null \
+        -exec jq -r --arg b "$CURRENT_BRANCH" 'select(.branch_name == $b) | .id' {} \; 2>/dev/null \
       | head -1)
   fi
 fi

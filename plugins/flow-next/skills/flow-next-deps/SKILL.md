@@ -20,7 +20,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ## Setup
 
 ```bash
-[ -d .flow ] && echo "OK: .flow/ exists" || echo "ERROR: run $FLOWCTL init"
+[ -d "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.flow" ] && echo "OK: .flow/ exists" || echo "ERROR: run $FLOWCTL init"
 command -v jq >/dev/null 2>&1 && echo "OK: jq installed" || echo "ERROR: brew install jq"
 ```
 

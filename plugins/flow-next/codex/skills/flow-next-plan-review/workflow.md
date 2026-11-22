@@ -15,7 +15,7 @@ Resolve the canonical spec id from the positional argument before backend
 routing. Parse `--review=<mode>` / `--review <mode>` from `$ARGUMENTS` first.
 Accepted explicit modes: `codex`, `copilot`, `cursor`, `claude`, `command`, `command:<label>`,
 `host`, `none`. Any other explicit value fails closed as for `ASK`, naming these accepted modes.
-For `command:<label>`, set `BACKEND=command` and keep the label for the backend file; a bare
+For `command:<label>`, set `BACKEND=command` and pass `--spec "command:<label>"` in the CLI Fast Path fence; a bare
 `command` sets `BACKEND=command` and flowctl takes the label from the configured backend.
 
 When an explicit mode exists, set `BACKEND` directly and do not call
@@ -35,7 +35,7 @@ bare backend name. If `BACKEND=ASK`, print the existing setup/override guidance
 and exit 1.
 
 If `BACKEND=none`, inform the user that plan review was skipped and return
-cleanly. Load no backend file and write no receipt/status.
+cleanly. Dispatch no backend and write no receipt/status.
 
 For an executable review backend, print the existing backend/override summary
 and continue.
@@ -50,7 +50,7 @@ $FLOWCTL checkpoint save --spec "$SPEC_ID" --json
 ```
 
 This checkpoint is mandatory before every dispatch, and it is the cycle's only
-one: backend files never save another. The reviewer receives the spec through
+one: neither the CLI Fast Path fence nor `workflow-host.md` saves another. The reviewer receives the spec through
 flowctl, so read its body only in the Fix Loop, which reads the current file
 before editing it. A user-edited spec is the source of truth; never review or
 restore a stale generated/checkpoint copy unless recovering after context
@@ -60,8 +60,10 @@ For host, provide the current spec/task material and review focus.
 
 ## Phase 2: Select One Backend Workflow
 
-Unknown/malformed backend values fail closed with the same `ASK`/error
-behavior; never guess a backend.
+CLI backends (`codex`, `copilot`, `cursor`, `claude`, `command`) dispatch directly
+from the CLI Fast Path fence in [SKILL.md](SKILL.md); `host` dispatches via
+[workflow-host.md](workflow-host.md). Unknown/malformed backend values fail closed
+with the same `ASK`/error behavior; never guess a backend.
 
 ## Common Terminal Contract
 

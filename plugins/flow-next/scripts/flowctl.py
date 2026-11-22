@@ -25712,7 +25712,7 @@ def _extract_substantive_commits(
                 cur_path = line[len("rename to "):]
                 renamed_paths.add(cur_path)
             elif line.startswith("+++ b/"):
-                cur_path = line[6:]
+                cur_path = line[6:].rstrip("\t")
             elif line.startswith(("--- ", "+++ ")):
                 continue
             elif line.startswith(("+", "-")) and commit and cur_path:

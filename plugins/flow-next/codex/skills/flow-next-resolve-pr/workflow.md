@@ -246,7 +246,7 @@ CURRENT_BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo 
 SPEC_ID=""; SPEC_PATH=""; DECISIONS_JSON="[]"
 if [[ -n "$CURRENT_BRANCH" ]]; then
   SPEC_ID="$(find "$REPO_ROOT/.flow/specs" "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' \
-    -exec jq -r --arg b "$CURRENT_BRANCH" 'select(.branch_name == $b) | .id // empty' {} + 2>/dev/null | head -1)"
+    -exec jq -r --arg b "$CURRENT_BRANCH" 'select(.branch_name == $b) | .id // empty' {} \; 2>/dev/null | head -1)"
 fi
 if [[ -n "$SPEC_ID" ]]; then
   SPEC_PATH="$REPO_ROOT/.flow/specs/${SPEC_ID}.md"              # .md sidecar always under .flow/specs/ (make-pr Phase 0)

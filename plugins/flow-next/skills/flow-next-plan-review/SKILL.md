@@ -123,9 +123,10 @@ When the verdict is `NEEDS_WORK`:
 
 3. Sync affected task specs when requirements, acceptance, design decisions,
    interfaces, retry/error semantics, or state values changed.
-4. Re-enter the SAME selected backend file's re-review step. Never load or mix
-   another backend. Codex/Copilot/Cursor/Claude/command resume only through a same-mode receipt;
-   host uses a fresh read-only subagent.
+4. Re-enter the SAME selected backend (the CLI Fast Path fence above for CLI
+   backends, or `workflow-host.md` for `host`). Never load or mix another
+   backend. Codex/Copilot/Cursor/Claude/command resume only through a same-mode
+   receipt; host uses a fresh read-only subagent.
 5. Attended, stop after that one re-review: `SHIP` completes; `NEEDS_WORK` surfaces the
    surviving findings to the caller, never a second fix pass. In the review loop, repeat
    from step 1 as above.
@@ -148,4 +149,4 @@ Recovery after context compaction:
 "$FLOWCTL" checkpoint restore --spec <SPEC_ID> --json
 ```
 
-Every re-review follows the selected backend file's receipt/status rules.
+Every re-review follows the selected backend's receipt/status rules (the CLI Fast Path fence for CLI backends, or `workflow-host.md` for `host`).
