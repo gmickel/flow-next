@@ -3,8 +3,11 @@ set -euo pipefail
 # Windows jq.exe ends lines with CRLF; drop the CR so values match paths and compare equal (#541).
 jq() { command jq "$@" | tr -d '\r'; return "${PIPESTATUS[0]}"; }
 
-PR_NUMBER="${1:?Usage: $0 PR_NUMBER}"
-OWNER_REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+PR_NUMBER="${1:?Usage: $0 PR_NUMBER [OWNER/REPO]}"
+OWNER_REPO="${2:-}"
+if [ -z "$OWNER_REPO" ]; then
+  OWNER_REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+fi
 OWNER="${OWNER_REPO%/*}"
 REPO="${OWNER_REPO#*/}"
 
@@ -112,50 +115,100 @@ fetch_thread_comments() {
 # Walk reviewThreads pages and collect raw nodes + static surfaces (author,
 # pr_comments, review_bodies) from the first page.
 first_page="$(fetch_page "")"
-author="$(echo "$first_page" | jq -r '.data.repository.pullRequest.author.login')"
-pr_comments="$(echo "$first_page" | jq '.data.repository.pullRequest.comments.nodes')"
-review_bodies="$(echo "$first_page" | jq '.data.repository.pullRequest.reviews.nodes')"
-
-threads="$(echo "$first_page" | jq '.data.repository.pullRequest.reviewThreads.nodes')"
-has_next="$(echo "$first_page" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')"
-cursor="$(echo "$first_page" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor')"
+first_meta="$(printf '%s' "$first_page" | jq -r '
+  if ((.errors // []) | length) > 0 then error("GraphQL response contained errors")
+  elif (.data.repository.pullRequest | type) != "object" then error("missing pullRequest in GraphQL response")
+  elif (.data.repository.pullRequest.reviewThreads.nodes | type) != "array" then error("missing reviewThreads.nodes")
+  elif (.data.repository.pullRequest.comments.nodes | type) != "array" then error("missing comments.nodes")
+  elif (.data.repository.pullRequest.reviews.nodes | type) != "array" then error("missing reviews.nodes")
+  elif (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage | type) != "boolean" then error("missing reviewThreads.pageInfo.hasNextPage")
+  elif .data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == true
+       and (((.data.repository.pullRequest.reviewThreads.pageInfo.endCursor | type) != "string")
+            or ((.data.repository.pullRequest.reviewThreads.pageInfo.endCursor | length) == 0)) then
+    error("missing reviewThreads.pageInfo.endCursor")
+  else
+    [
+      (.data.repository.pullRequest.author.login // ""),
+      (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage | tostring),
+      (.data.repository.pullRequest.reviewThreads.pageInfo.endCursor // "")
+    ] | join("\u001f")
+  end')"
+IFS=$'\x1f' read -r author has_next cursor <<< "$first_meta"
+pr_comments="$(printf '%s' "$first_page" | jq -c '.data.repository.pullRequest.comments.nodes')"
+review_bodies="$(printf '%s' "$first_page" | jq -c '.data.repository.pullRequest.reviews.nodes')"
+threads="$(printf '%s' "$first_page" | jq -c '.data.repository.pullRequest.reviewThreads.nodes')"
 
 while [ "$has_next" = "true" ]; do
   next="$(fetch_page "$cursor")"
-  next_nodes="$(echo "$next" | jq '.data.repository.pullRequest.reviewThreads.nodes')"
-  threads="$(jq -s '.[0] + .[1]' <(echo "$threads") <(echo "$next_nodes"))"
-  has_next="$(echo "$next" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage')"
-  cursor="$(echo "$next" | jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor')"
+  next_meta="$(printf '%s' "$next" | jq -r '
+    if ((.errors // []) | length) > 0 then error("GraphQL response contained errors")
+    elif (.data.repository.pullRequest.reviewThreads.nodes | type) != "array" then error("missing reviewThreads.nodes")
+    elif (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage | type) != "boolean" then error("missing reviewThreads.pageInfo.hasNextPage")
+    elif .data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == true
+         and (((.data.repository.pullRequest.reviewThreads.pageInfo.endCursor | type) != "string")
+              or ((.data.repository.pullRequest.reviewThreads.pageInfo.endCursor | length) == 0)) then
+      error("missing reviewThreads.pageInfo.endCursor")
+    else
+      [
+        (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage | tostring),
+        (.data.repository.pullRequest.reviewThreads.pageInfo.endCursor // "")
+      ] | join("\u001f")
+    end')"
+  next_nodes="$(printf '%s' "$next" | jq -c '.data.repository.pullRequest.reviewThreads.nodes')"
+  threads="$(printf '%s\n%s\n' "$threads" "$next_nodes" | jq -cs '.[0] + .[1]')"
+  IFS=$'\x1f' read -r has_next cursor <<< "$next_meta"
 done
 
-# Fetch additional thread-comments pages when any thread's initial page is
-# not exhausted. Mutates $threads in place.
-thread_count="$(echo "$threads" | jq 'length')"
-i=0
-while [ "$i" -lt "$thread_count" ]; do
-  tid="$(echo "$threads" | jq -r ".[$i].id")"
-  chas_next="$(echo "$threads" | jq -r ".[$i].comments.pageInfo.hasNextPage")"
-  ccursor="$(echo "$threads" | jq -r ".[$i].comments.pageInfo.endCursor")"
+# Fetch additional thread-comments pages ONLY for threads whose initial page is
+# not exhausted (1 jq scan over all threads instead of 3*N forks). Validate every
+# thread carries an explicit boolean pageInfo.hasNextPage so missing metadata
+# never masquerades as complete.
+paginated_threads="$(printf '%s' "$threads" | jq -r '
+  to_entries[]
+  | if (.value.comments.nodes | type) != "array" then
+      error("missing thread comments.nodes")
+    elif (.value.comments.pageInfo.hasNextPage | type) != "boolean" then
+      error("missing thread comments.pageInfo.hasNextPage")
+    elif .value.comments.pageInfo.hasNextPage == true then
+      if (.value.comments.pageInfo.endCursor | type) != "string"
+         or (.value.comments.pageInfo.endCursor | length) == 0 then
+        error("missing thread comments.pageInfo.endCursor")
+      else
+        [(.key | tostring), .value.id, .value.comments.pageInfo.endCursor] | join("\u001f")
+      end
+    else empty end')"
+while IFS=$'\x1f' read -r i tid ccursor; do
+  [ -n "$i" ] || continue
+  chas_next="true"
   while [ "$chas_next" = "true" ]; do
     page="$(fetch_thread_comments "$tid" "$ccursor")"
-    more_nodes="$(echo "$page" | jq '.data.node.comments.nodes')"
-    threads="$(echo "$threads" | jq --argjson idx "$i" --argjson more "$more_nodes" '
-      .[$idx].comments.nodes = (.[$idx].comments.nodes + $more)
+    page_meta="$(printf '%s' "$page" | jq -r '
+      if ((.errors // []) | length) > 0 then error("GraphQL response contained errors")
+      elif (.data.node.comments.nodes | type) != "array" then error("missing node.comments.nodes")
+      elif (.data.node.comments.pageInfo.hasNextPage | type) != "boolean" then error("missing node.comments.pageInfo.hasNextPage")
+      elif .data.node.comments.pageInfo.hasNextPage == true
+           and (((.data.node.comments.pageInfo.endCursor | type) != "string")
+                or ((.data.node.comments.pageInfo.endCursor | length) == 0)) then
+        error("missing node.comments.pageInfo.endCursor")
+      else
+        [
+          (.data.node.comments.pageInfo.hasNextPage | tostring),
+          (.data.node.comments.pageInfo.endCursor // "")
+        ] | join("\u001f")
+      end')"
+    more_nodes="$(printf '%s' "$page" | jq -c '.data.node.comments.nodes')"
+    threads="$(printf '%s\n%s\n' "$threads" "$more_nodes" | jq -cs --argjson idx "$i" '
+      .[1] as $more | .[0] | .[$idx].comments.nodes += $more
     ')"
-    chas_next="$(echo "$page" | jq -r '.data.node.comments.pageInfo.hasNextPage')"
-    ccursor="$(echo "$page" | jq -r '.data.node.comments.pageInfo.endCursor')"
+    IFS=$'\x1f' read -r chas_next ccursor <<< "$page_meta"
   done
-  i=$((i + 1))
-done
+done <<< "$paginated_threads"
 
-# Shape the final payload.
-jq -n \
+# Shape the final payload via stdin (avoids ARG_MAX on large PRs).
+printf '%s\n%s\n%s\n' "$threads" "$pr_comments" "$review_bodies" | jq -s \
   --arg pr "$PR_NUMBER" \
   --arg author "$author" \
-  --argjson threads "$threads" \
-  --argjson prc "$pr_comments" \
-  --argjson rvb "$review_bodies" \
-  '{
+  '.[0] as $threads | .[1] as $prc | .[2] as $rvb | {
     pr_number: ($pr | tonumber),
     review_threads: [
       $threads[]

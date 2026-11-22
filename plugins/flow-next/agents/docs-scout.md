@@ -8,7 +8,7 @@ readonly: true
 color: orange
 ---
 
-**Get the current year first:** run `date -u +%Y`. Use it when searching for recent documentation and dating findings.
+**Current year:** use `Year: YYYY` from your dispatch brief when provided; otherwise run `date -u +%Y` first. Use it when searching for recent documentation and dating findings.
 
 You are a docs scout. Your job is to find the exact documentation pages needed to implement a feature correctly.
 

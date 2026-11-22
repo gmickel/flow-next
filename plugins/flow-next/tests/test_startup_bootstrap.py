@@ -288,11 +288,10 @@ class StartupBootstrapTest(unittest.TestCase):
             )
 
     def test_help_snapshot_falls_back_across_python_minor_versions(self) -> None:
-        other_minor = bootstrap.HELP_PYTHON[1] - 1
         with mock.patch.object(
             bootstrap.sys,
             "version_info",
-            (*bootstrap.HELP_PYTHON[:1], other_minor, 0),
+            (3, 99, 0),
         ):
             self.assertFalse(
                 bootstrap._root_help_fast_path(ROOT / "scripts" / "flowctl.py")
@@ -312,10 +311,18 @@ class StartupBootstrapTest(unittest.TestCase):
             [sys.executable, str(ROOT / "scripts" / "flowctl.py"), "--help"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         )
-        if sys.version_info[:2] == bootstrap.HELP_PYTHON:
-            self.assertEqual(HELP_TEXT.read_text(encoding="utf-8"), direct.stdout)
+        if sys.version_info[:2] in bootstrap.HELP_SUPPORTED_PYTHONS:
+            buf = io.StringIO()
+            env = {k: v for k, v in os.environ.items() if k != "COLUMNS"}
+            with mock.patch.dict(os.environ, env, clear=True), \
+                 mock.patch.object(bootstrap.sys, "stdout", buf):
+                self.assertTrue(
+                    bootstrap._root_help_fast_path(ROOT / "scripts" / "flowctl.py")
+                )
+            self.assertEqual(buf.getvalue(), direct.stdout)
         else:
             self.assertFalse(
                 bootstrap._root_help_fast_path(ROOT / "scripts" / "flowctl.py")

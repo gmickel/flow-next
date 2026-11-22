@@ -21,8 +21,11 @@ API=https://api.bitbucket.org/2.0
 [[ "${ORIGIN_PROJECT:-}" =~ ^[^/[:space:]?#%]+/[^/[:space:]?#%]+$ ]] || fail "no origin repository (<workspace>/<repository>)"
 REPO="/repositories/$ORIGIN_PROJECT"
 # bkt finds its host only through a context; take a Bitbucket Cloud one, the active one first.
-CONTEXT=$(bkt context list --json 2>/dev/null | jq -r '[.contexts // [] | .[] | select(.host == "api.bitbucket.org")]
-  | sort_by(.active != true) | .[0].name // empty') || CONTEXT=""
+CONTEXT="${BKT_CONTEXT:-}"
+if [[ -z "$CONTEXT" ]]; then
+  CONTEXT=$(bkt context list --json 2>/dev/null | jq -r '[.contexts // [] | .[] | select(.host == "api.bitbucket.org")]
+    | sort_by(.active != true) | .[0].name // empty') || CONTEXT=""
+fi
 [[ -n "$CONTEXT" ]] || fail "bkt has no Bitbucket Cloud context"
 
 bkt_json() {

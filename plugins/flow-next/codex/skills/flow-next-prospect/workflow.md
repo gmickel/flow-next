@@ -299,13 +299,7 @@ SURVIVOR_TARGET=""                                              # set only when 
 
 ### 2.2 — Pick personas
 
-Apply the selection rule from `personas.md` based on `FOCUS_KIND` plus hint flavor:
-
-- `open-ended` / `path` / `constraint` / generic `concept` / `top N` / `N ideas` → **senior-maintainer + first-time-user**
-- `concept` matching `/audit|harden|secur|review|polish|risk|qual/i` → **senior-maintainer + adversarial-reviewer**
-- `raise the bar` → **all three** (senior-maintainer + first-time-user + adversarial-reviewer)
-
-The selected persona texts are read from `personas.md` and concatenated under `## Personas` in the Phase 2 prompt. Order: senior-maintainer first, then the others in the order listed by the rule.
+Read `personas.md` and apply its selection rule for `FOCUS_KIND` / hint flavor. Concatenate the selected persona texts under `## Personas` in the Phase 2 prompt (senior-maintainer first, then the others in rule order).
 
 ### 2.3 — Run the divergent generation pass
 
@@ -338,19 +332,19 @@ Produce [GENERATION_TARGET_DESCRIPTION] candidates. Wide net — encourage contr
 
 ## Output format
 
-Emit a flat YAML list. **One item per candidate.** No nesting, no preamble, no commentary outside YAML. The list is consumed verbatim by the next prompt — extra prose breaks the parser. Title, summary, and risk_notes prose follows the artifact prose contract in [docs/prose.md](../../docs/flow-next/prose.md); proceed without it when the doc is absent.
+Emit a JSON array of objects — **one object per candidate.** No preamble, no commentary outside JSON. The array is consumed verbatim by the next prompt. Title, summary, and risk_notes prose follows the artifact prose contract in [docs/prose.md](../../docs/flow-next/prose.md); proceed without it when the doc is absent.
 
-```yaml
-candidates:
-  - title: <short title, ≤80 chars>
-    summary: <one-line summary, ≤120 chars>
-    affected_areas:
-      - <path or subsystem>
-      - <path or subsystem>
-    size: <S | M | L | XL>
-    risk_notes: <one-line risk / unknown / caveat — ≤120 chars>
-    persona: <senior-maintainer | first-time-user | adversarial-reviewer>
-  - title: ...
+```json
+[
+  {
+    "title": "<short title, ≤80 chars>",
+    "summary": "<one-line summary, ≤120 chars>",
+    "affected_areas": ["<path or subsystem>"],
+    "size": "S | M | L | XL",
+    "risk_notes": "<one-line risk / unknown / caveat — ≤120 chars>",
+    "persona": "senior-maintainer | first-time-user | adversarial-reviewer"
+  }
+]
 ```
 
 Constraints:
@@ -371,63 +365,29 @@ The `GENERATION_TARGET_DESCRIPTION` slot:
 | `N ideas` | `at least N (you may exceed N if the wide net produces more)` |
 | `raise the bar` | `25-30 — broader net, the critique pass will be stricter` |
 
-### 2.4 — Validate the YAML
+### 2.4 — Validate the candidates JSON
 
-Write the model output, fenced or bare, with the **Write tool** to a literal unique path (e.g. `/tmp/flow-prospect-candidates-<suffix>.md`, your resolved temp dir) and validate it with a stdlib-only reader for the §2.3 shape. The path is an argument because the heredoc owns stdin:
+Write the model output with the **Write tool** to a literal unique path (e.g. `/tmp/flow-prospect-candidates-<suffix>.json`, your resolved temp dir) and validate with `jq`:
 
 ```bash
-# Re-declare the whole Preamble block verbatim here first (vars die across prompt turns).
-
-$PY - "/tmp/flow-prospect-candidates-<suffix>.md" <<'PY'
-import json, re, sys
-
-text = open(sys.argv[1], encoding="utf-8").read()
-m = re.search(r"```yaml\s*\n(.*?)\n```", text, re.DOTALL)
-body = m.group(1) if m else text
-
-def scalar(v):
-    v = v.strip()
-    return v[1:-1] if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'" else v
-
-# A list of flat mappings; affected_areas is the one list value (block or [a, b]).
-cands, cur, list_key, item_indent = [], None, None, 0
-for raw in body.splitlines():
-    s = raw.strip()
-    if not s or s.startswith("#") or s == "candidates:":
-        continue
-    indent = len(raw) - len(raw.lstrip())
-    if s.startswith("- ") and list_key and indent > item_indent:
-        cur[list_key].append(scalar(s[2:]))
-        continue
-    if s.startswith("- "):
-        cur, list_key, item_indent = {}, None, indent
-        cands.append(cur)
-        s = s[2:]
-    key, sep, value = s.partition(":")
-    if cur is None or not sep:
-        continue
-    key, value = key.strip(), value.strip()
-    if not value:
-        cur[key], list_key = [], key
-    elif value.startswith("[") and value.endswith("]"):
-        cur[key], list_key = [scalar(x) for x in value[1:-1].split(",") if x.strip()], None
-    else:
-        cur[key], list_key = scalar(value), None
-
-valid = []
-for i, c in enumerate(cands):
-    missing = [f for f in ("title", "summary", "affected_areas") if not c.get(f)]
-    if missing:
-        print(f"Phase 2: dropped malformed candidate at index {i}: missing {', '.join(missing)}", file=sys.stderr)
-    else:
-        valid.append(c)
-print(json.dumps(valid))
-PY
+CANDIDATES_RAW="/tmp/flow-prospect-candidates-<suffix>.json"
+CANDIDATES_YAML=$(jq -c '
+  (if type == "object" and (.candidates | type == "array") then .candidates
+   elif type == "array" then .
+   else error("candidates must be a JSON array") end)
+  | [ .[] | select(
+      type == "object"
+      and (.title | type == "string" and length > 0)
+      and (.summary | type == "string" and length > 0)
+      and (.affected_areas | type == "array" and length > 0 and all(type == "string" and length > 0))
+    ) ]
+' "$CANDIDATES_RAW")
+TOTAL_IN=$(jq 'if type == "object" and (.candidates | type == "array") then (.candidates | length) else length end' "$CANDIDATES_RAW")
+VALID_OUT=$(printf '%s' "$CANDIDATES_YAML" | jq 'length')
+[ "$VALID_OUT" -lt "$TOTAL_IN" ] && echo "Phase 2: dropped $((TOTAL_IN - VALID_OUT)) malformed candidate(s)" >&2 || true
 ```
 
-Any candidate missing `title`, `summary`, or `affected_areas` is dropped before Phase 3 with the stderr warning above.
-
-Hand the printed JSON list (valid YAML) to Phase 3 as `CANDIDATES_YAML`, so downstream prompts get a clean shape.
+Any candidate missing `title`, `summary`, or non-empty `affected_areas` is dropped before Phase 3 (warn on stderr when the count shrinks). Hand the validated JSON array (`CANDIDATES_YAML`) to Phase 3.
 
 If fewer than `floor(GENERATION_TARGET_MIN * 0.7)` valid candidates survive validation: read
 [references/failure-branches.md § Under-volume](references/failure-branches.md#under-volume) and ask its plain-text numbered prompt.
@@ -448,21 +408,9 @@ If fewer than `floor(GENERATION_TARGET_MIN * 0.7)` valid candidates survive vali
 
 ### 3.1 — Build the critique prompt (the subagent's only inputs)
 
-Inputs handed to the critique subagent: `CANDIDATES_YAML` (Phase 2 §2.4) + the Phase 1 grounding snapshot + the taxonomy + the target rejection rate. **Never included in the dispatch:** `FOCUS_HINT`, persona texts, the Phase 2 prompt (they live in THIS context, not the subagent's — the point of the split). The subagent returns the per-candidate `keep|drop|taxonomy|reason` YAML, which §3.2 parses on the main thread.
+Inputs handed to the critique subagent: `CANDIDATES_YAML` (Phase 2 §2.4) + the Phase 1 grounding snapshot + the frozen taxonomy + the target rejection rate. **Never included in the dispatch:** `FOCUS_HINT`, persona texts, the Phase 2 prompt (they live in THIS context, not the subagent's — the point of the split). The subagent returns the per-candidate `keep|drop|taxonomy|reason` YAML, which §3.2 parses on the main thread.
 
-Rejection taxonomy (anchor — frozen string list):
-
-```
-duplicates-open-epic       — material overlap with an open spec in the grounding snapshot (slug kept stable for artifact round-trip; semantics now read "duplicates-open-spec")
-out-of-scope               — outside what this codebase / the focus area should tackle
-out-of-scope-vs-strategy   — contradicts an active track in the strategy snapshot (advisory only — user can override at promote time)
-insufficient-signal        — speculative without evidence in grounding snapshot
-too-large                  — XL or undermined by size; should be split or deferred
-backward-incompat          — would break public contracts / users without strong justification
-other                      — explain in `reason` field; use sparingly
-```
-
-`out-of-scope-vs-strategy` is **advisory only**. It fires when a candidate's direction contradicts an active track from the strategy snapshot (Phase 1 §1.2). The rejection cites the violated track verbatim: `Rejected: [out-of-scope-vs-strategy] — contradicts active track "<track-name>"`. Promote reads only survivors, so a rejected idea cannot be promoted; to pursue it anyway, capture it with `/flow-next:capture`. When the strategy snapshot scanned `none`, this category is unreachable — Phase 3 will not emit it.
+`out-of-scope-vs-strategy` is **advisory only**: when the strategy snapshot scanned `none` it is unreachable; otherwise a rejected idea cites the violated track verbatim (`contradicts active track "<track-name>"`) and can still be pursued via `/flow-next:capture`.
 
 Prompt template:
 
@@ -669,41 +617,13 @@ $FLOWCTL prospect write --from-json "$PROSPECT_INPUT" --json
 ```
 
 The verb allocates the same-day collision-safe artifact id, derives volume,
-survivor/rejected counts and rejection rate, validates every item, and renders
+survivor/rejected counts and rejection rate, validates every item, renders the
+frozen body layout (`## Focus`, `## Grounding snapshot`, `## Survivors` buckets
+with `**Next step:** promote, then /flow-next:flow <spec-id>`, and `## Rejected`),
 and writes atomically. On invalid input it reports all errors without writing;
 correct those fields and retry. Keep the returned path for Phase 6. No Python
-imports or hand-authored frontmatter are needed.
-
-### 5.5 — Body section ordering (frozen)
-
-The writer emits body sections in this exact order:
-
-```
-## Focus
-## Grounding snapshot
-## Survivors
-  ### High leverage (1-3)
-  ### Worth considering (4-7)
-  ### If you have the time (8+)
-## Rejected
-```
-
-Each survivor block:
-
-```
-#### <position>. <title>
-**Summary:** <one line>
-**Leverage:** Small-diff lever because <X>; impact lands on <Y>.
-**Size:** <S|M|L|XL>
-**Affected areas:** <comma-joined list>      # only when present
-**Risk notes:** <one line>                   # only when present
-**Persona:** <senior-maintainer | first-time-user | adversarial-reviewer>   # only when present
-**Next step:** promote, then /flow-next:flow <spec-id>
-```
-
-`**Next step:**` is a hard-coded template line - not a candidate field (flowctl's `write_prospect_artifact` emits it verbatim). It points at `/flow-next:flow` on the promoted spec so the router decides the next stage (refine only when a named decision is open). Chart routing is a handoff-time judgment (Phase 6 + the chart boundary in SKILL.md), never a per-candidate artifact field.
-
-Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
+imports or hand-authored frontmatter are needed. Chart routing is a Phase 6
+judgment, never a candidate field.
 
 ### Done when
 

@@ -51,26 +51,9 @@ agent-browser state clear name         # Clear saved state
 agent-browser state clean --older-than 7  # Clean old states
 ```
 
+For authenticated session reuse with expiry handling, see [auth.md](auth.md) §Token Refresh Handling.
+
 ## Common Patterns
-
-### Authenticated Session Reuse
-
-```bash
-STATE_FILE="/tmp/auth-state.json"
-
-if [[ -f "$STATE_FILE" ]]; then
-    agent-browser state load "$STATE_FILE"
-    agent-browser open https://app.example.com/dashboard
-else
-    agent-browser open https://app.example.com/login
-    agent-browser snapshot -i
-    agent-browser fill @e1 "$USERNAME"
-    agent-browser fill @e2 "$PASSWORD"
-    agent-browser click @e3
-    agent-browser wait --load networkidle
-    agent-browser state save "$STATE_FILE"
-fi
-```
 
 ### Concurrent Scraping
 
@@ -101,17 +84,9 @@ agent-browser --session variant-a screenshot /tmp/variant-a.png
 agent-browser --session variant-b screenshot /tmp/variant-b.png
 ```
 
-## Default Session
+## Cleanup and Best Practices
 
-When `--session` is omitted, commands use the default session:
-
-```bash
-agent-browser open https://example.com
-agent-browser snapshot -i
-agent-browser close  # Closes default session
-```
-
-## Session Cleanup
+Omitting `--session` uses the default session. Always close sessions when done to avoid leaked browser processes:
 
 ```bash
 agent-browser --session auth close     # Close specific session
@@ -119,12 +94,7 @@ agent-browser session list             # List active sessions
 agent-browser close                    # Close default session
 ```
 
-Always close sessions when done to avoid leaked processes. If a previous session wasn't closed properly, `agent-browser close` cleans it up.
-
-## Best Practices
-
 1. **Name sessions semantically**: `--session github-auth` not `--session s1`
-2. **Always close when done**: Avoid leaked browser processes
-3. **Secure state files**: Don't commit (contain auth tokens), add to `.gitignore`
-4. **Use encryption**: Set `AGENT_BROWSER_ENCRYPTION_KEY` for sensitive state
-5. **Timeout long sessions**: `timeout 60 agent-browser --session long-task get text body`
+2. **Secure state files**: Don't commit (contain auth tokens), add to `.gitignore`
+3. **Use encryption**: Set `AGENT_BROWSER_ENCRYPTION_KEY` for sensitive state
+4. **Timeout long sessions**: `timeout 60 agent-browser --session long-task get text body`

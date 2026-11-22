@@ -30,7 +30,7 @@ Start from the pointer and follow the chain wherever the evidence leads; a point
 - **Blame and commits.** `git blame -L <range> -- <file>` (or `git log -S '<token>' -- <file>` when the line moved) names the commits that introduced or last changed the code; `git show <sha>` reads the message and diff. A move or a mechanical rewrite usually needs a second blame pass or `git log --all --oneline -- <path>`.
 - **The PRs behind the commits.** `gh pr list --search "<sha>" --state merged --json number,title,body,url` (or `glab mr list --search`) finds the PR; `gh pr view <n> --comments` reads its body, review threads, and linked issues.
 - **The tracker thread, only through access the session already has.** When the sync bridge is active (`$FLOWCTL sync active --json` reports `active: true`), read the linked issue through `$FLOWCTL tracker` read verbs; when an MCP for the tracker is loaded, use it; otherwise `gh issue view` / `glab issue view` for a referenced issue. Never configure, install, or authenticate anything.
-- **Bug and decision memory.** `$FLOWCTL memory search "<keywords>" --track bug --json` for the failure the code guards against; `--track knowledge --category decisions` for a recorded decision; `$FLOWCTL memory read <entry-id>` for the body.
+- **Bug and decision memory.** `$FLOWCTL memory search "<keywords>" --track bug --limit 10 --json` for the failure the code guards against; `--track knowledge --category decisions --limit 10` for a recorded decision; `$FLOWCTL memory read <entry-id>` for the body.
 - **The spec, when a commit or PR names one.** `$FLOWCTL cat <id>`; its Decision Context or Boundaries may carry the reason.
 
 Do not survey the module; read what the chain leads to.

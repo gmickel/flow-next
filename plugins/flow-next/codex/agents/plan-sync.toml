@@ -54,8 +54,8 @@ Parse each completed-task spec for:
 One scan covering every completed task. Based on each done summary and evidence, find the actual code:
 
 ```bash
-# Find files mentioned in evidence or likely locations
-grep -r "<key terms from done summaries>" --include="*.ts" --include="*.py" -l
+# Inspect the actual files touched by the completed task's commits from Phase 1
+git show --stat --format= <commit-sha...>
 ```
 
 Read the relevant files. Note actual, per completed task:

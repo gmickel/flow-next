@@ -7,8 +7,10 @@
 jq() { command jq "$@" | tr -d '\r'; return "${PIPESTATUS[0]}"; }
 bb_fail() { echo "${0##*/}: $*" >&2; exit 1; }
 
-BKT_CONTEXT=$(bkt context list --json 2>/dev/null | jq -r '[.contexts // [] | .[] | select(.host == "api.bitbucket.org")]
-  | sort_by(.active != true) | .[0].name // empty') || BKT_CONTEXT=""
+if [[ -z "${BKT_CONTEXT:-}" ]]; then
+  BKT_CONTEXT=$(bkt context list --json 2>/dev/null | jq -r '[.contexts // [] | .[] | select(.host == "api.bitbucket.org")]
+    | sort_by(.active != true) | .[0].name // empty') || BKT_CONTEXT=""
+fi
 [[ -n "$BKT_CONTEXT" ]] || bb_fail "bkt has no Bitbucket Cloud context; run bkt auth login https://bitbucket.org --kind cloud --username <Atlassian email> --web-token, then bkt context create bitbucket --host https://api.bitbucket.org/2.0 --workspace <workspace>"
 ORIGIN_URL=$(git remote get-url origin 2>/dev/null) || bb_fail "no origin remote"
 ORIGIN_PATH=${ORIGIN_URL#*:}; [[ "$ORIGIN_URL" != *://* ]] || ORIGIN_PATH=${ORIGIN_URL#*://*/}

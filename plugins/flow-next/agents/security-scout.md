@@ -24,9 +24,11 @@ GitHub protects branches via two independent mechanisms — **classic branch pro
 # Check if gh CLI is authenticated
 gh auth status 2>&1 | head -5
 
-# Resolve the DEFAULT branch first — never assume main/master. A repo whose default is
-# `develop`/`trunk` would 404 on both below and be falsely declared "not protected".
-BR=$(gh api repos/{owner}/{repo} --jq .default_branch 2>/dev/null || echo main)
+# Resolve the DEFAULT branch AND secret-scanning status in one API call — never assume main/master.
+# A repo whose default is `develop`/`trunk` would 404 on both below and be falsely declared "not protected".
+REPO_META=$(gh api repos/{owner}/{repo} --jq '[(.default_branch // "main"), (.security_and_analysis.secret_scanning.status // "")] | @tsv' 2>/dev/null || printf 'main\t')
+BR="${REPO_META%%	*}"
+SECRET_SCAN_STATUS="${REPO_META#*	}"
 
 # 1. Classic branch protection (legacy endpoint)
 gh api "/repos/{owner}/{repo}/branches/$BR/protection" 2>&1
@@ -37,6 +39,10 @@ gh api "/repos/{owner}/{repo}/branches/$BR/protection" 2>&1
 #    {pull_request, non_fast_forward, deletion, required_status_checks, required_linear_history,
 #     required_signatures, required_deployments, code_scanning}.
 gh api "/repos/{owner}/{repo}/rules/branches/$BR" 2>&1
+
+# 3. Secret Scanning (SE2) — reuse SECRET_SCAN_STATUS in this same shell block (vars die across tool calls)
+echo "secret_scanning=${SECRET_SCAN_STATUS:-null}"
+[ -n "$SECRET_SCAN_STATUS" ] || gh api /repos/{owner}/{repo}/secret-scanning/alerts 2>&1 | head -5
 ```
 
 **SE1 verdict:**
@@ -53,12 +59,7 @@ Note: Parse the repo owner/name from `git remote get-url origin` first.
 
 ### Secret Scanning
 
-```bash
-# Prefer the settings field (one call, clean tri-state) over the alerts endpoint
-gh api repos/{owner}/{repo} --jq '.security_and_analysis.secret_scanning.status' 2>&1
-# Fallback signal if the field is null (older API / no access):
-gh api /repos/{owner}/{repo}/secret-scanning/alerts 2>&1 | head -5
-```
+Evaluated from `secret_scanning=...` (or the alerts fallback) captured in the GitHub API block above.
 
 **SE2 verdict (tri-state — a permission failure is NOT "disabled"):**
 - ✅ status `enabled`, or alerts endpoint returns a JSON array.

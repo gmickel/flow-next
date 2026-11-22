@@ -52,17 +52,7 @@ fi
 | Mode | When | Behavior |
 |------|------|----------|
 | **Interactive** (default) | User is at the terminal | Ask decisions on ambiguous cases via blocking-question tool; confirm batched actions; run discoverability check with consent |
-| **Autofix** (`mode:autofix` in arguments) | Autonomous or batch usage | No user questions. Apply Keep/Update/Consolidate/auto-Delete/Replace-with-sufficient-evidence directly. Mark ambiguous as stale. Print the full report. Discoverability surfaces as a recommendation, not an edit |
-
-### Autofix mode rules
-
-- **No user questions.** Never call the blocking-question tool.
-- **Process all entries in scope.** No scope-narrowing question. If no scope hint was provided, process every categorized entry.
-- **Attempt all safe actions.** Keep (`mark-fresh` stamp only), Update (write tool), Consolidate (merge + `git rm` subsumed), auto-Delete (only when code AND problem domain both gone), Replace (only with sufficient evidence to write a trustworthy successor).
-- **Never apply Harden.** Classify and report Harden candidates (and un-graduation proposals) under Recommended with full detail — gate type, draft artifact, evidence, the `--gate-ref` that would be recorded — but write no artifact and demote no entry.
-- **Mark ambiguous as stale.** When classification is genuinely ambiguous (Update vs Replace vs Consolidate vs Delete) or Replace evidence is insufficient, run `flowctl memory mark-stale <id> --reason "..."` instead of guessing. Stale-marking writes are atomic and round-trip safe.
-- **Conservative confidence.** Borderline cases get marked stale; never deleted on autofix.
-- **Always print the full report.** The report is the sole deliverable — there is no user to ask follow-ups.
+| **Autofix** (`mode:autofix` in arguments) | Autonomous or batch usage | No user questions. Process all entries in scope; apply Keep/Update/Consolidate/auto-Delete/Replace-with-sufficient-evidence directly; mark ambiguous/borderline entries as stale (never delete on autofix); never apply Harden (report under Recommended); print the full report; surface discoverability as a recommendation |
 
 ## Interaction Principles (interactive mode only)
 
@@ -109,8 +99,4 @@ The full report is the deliverable — print it as markdown to stdout. Do not su
 
 **Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 
-Report structure and schema: [workflow.md](workflow.md) §5.
-
-Then per-entry detail (id, classification, evidence, action taken). For Consolidate: which entry was canonical, what unique content was merged, what was deleted. For Replace: what the old entry recommended vs what current code does, path to successor (decision Replace also notes the old entry now carries `decision_status: superseded`). For Marked stale: why ambiguous. For Harden: gate type, artifact path, `--gate-ref`, and how the gate was verified live (a failed graduation names the reason and states the entry was left active). For glossary terms: only stale + alias-creep cases get per-term lines (Keep is silent); husks get a one-line advisory each.
-
-Autofix mode splits actions into **Applied** (writes succeeded) and **Recommended** (writes failed — e.g. permission denied — plus every Harden candidate, which autofix never attempts). The structure is the same; only the bucket differs.
+Report structure, per-entry/glossary detail, and the autofix Applied/Recommended split: [workflow.md](workflow.md) §5.

@@ -2608,6 +2608,7 @@ def cmd_setup_status(args: argparse.Namespace) -> None:
     for path in spec_paths:
         if not any(path.exists() and (root / other).exists() and path.samefile(root / other) for other in spec_files):
             spec_files.append(path.name)
+    feat_status = _compute_features_status(repo_root_override=root, use_json=True)
     result = {
         "first_run": not bool(meta.get("setup_version")),
         "setup_version": meta.get("setup_version"), "plugin_version": version,
@@ -2618,6 +2619,12 @@ def cmd_setup_status(args: argparse.Namespace) -> None:
         "legacy_artifacts": [name for name in LEGACY_COPY_ARTIFACTS if exists(root / name)],
         "tracker_active": tracker_sync_active(),
         "judge_available": bool(os.environ.get("TYPESAFE_API_KEY")),
+        "features_status": {
+            "map_exists": feat_status["map_exists"],
+            "recommendation": feat_status["recommendation"],
+            "due": feat_status["due"],
+            "reasons": feat_status["reasons"],
+        },
     }
     json_output(result)
 
@@ -4337,7 +4344,7 @@ def run_codex_exec(
         if spec.model is None or spec.effort is None:
             spec = spec.resolve()
         explicit_model = spec.model_explicit
-    effective_effort = spec.effort or "high"
+    effective_effort = spec.effort or BACKEND_REGISTRY["codex"]["default_effort"]
 
     if session_id:
         # Resume argv must mirror the fresh dispatch's model / sandbox / effort /
@@ -8381,7 +8388,7 @@ def run_copilot_exec(
         if spec.model is None or spec.effort is None:
             spec = spec.resolve()
         explicit_model = spec.model_explicit
-    effective_effort = spec.effort or "high"
+    effective_effort = spec.effort or BACKEND_REGISTRY["copilot"]["default_effort"]
 
     use_stdin = sys.platform == "win32"
 
@@ -12756,24 +12763,6 @@ This is a RE-REVIEW. Specs have been modified since your last review.
 
 {context_instruction}
 
-## Task Spec Sync Required
-
-If you modified the epic spec in ways that affect task specs, you MUST also update
-the affected task specs before requesting re-review. Use:
-
-````bash
-flowctl task set-spec <TASK_ID> --file - <<'EOF'
-<updated task spec content>
-EOF
-````
-
-Task specs need updating when epic changes affect:
-- State/enum values referenced in tasks
-- Acceptance criteria that tasks implement
-- Approach/design decisions tasks depend on
-- Lock/retry/error handling semantics
-- API signatures or type definitions
-
 {closing}
 
 ---
@@ -12782,6 +12771,11 @@ Task specs need updating when epic changes affect:
     elif review_type == "completion":
         context_instruction = """Re-read these files from the repository to see the latest changes.
 Re-read from disk — do NOT rely on cached content."""
+        closing = (
+            "Apply the CONVERGENCE RATCHET contract above to reach your verdict."
+            if has_ratchet
+            else "Re-verify each requirement from the epic spec against the updated implementation."
+        )
 
         return f"""{ratchet}## IMPORTANT: Re-review After Fixes
 
@@ -12792,7 +12786,7 @@ This is a RE-REVIEW. Code has been modified to address gaps since your last revi
 
 {context_instruction}
 
-Re-verify each requirement from the epic spec against the updated implementation.
+{closing}
 
 ---
 
@@ -25698,33 +25692,156 @@ def _memory_audit_paths(memory_dir: Path) -> list[Path]:
                   and not p.is_symlink())
 
 
+def _extract_substantive_commits(
+    lines: list[str], audit_meta_re: re.Pattern[str], *, by_path: bool = False
+) -> Any:
+    """Count substantive (non-audit-metadata) commit hashes from git log --patch --unified=0."""
+    if by_path:
+        commits_by_path: dict[str, set[str]] = {}
+        renamed_paths: set[str] = set()
+        commit: Optional[str] = None
+        cur_path: Optional[str] = None
+        for line in lines:
+            if line.startswith("COMMIT "):
+                commit = line[7:]
+                cur_path = None
+            elif line.startswith("diff --git "):
+                parts = line.split(" b/", 1)
+                cur_path = parts[1] if len(parts) == 2 else None
+            elif line.startswith("rename to "):
+                cur_path = line[len("rename to "):]
+                renamed_paths.add(cur_path)
+            elif line.startswith("+++ b/"):
+                cur_path = line[6:].rstrip("\t")
+            elif line.startswith(("--- ", "+++ ")):
+                continue
+            elif line.startswith(("+", "-")) and commit and cur_path:
+                if not audit_meta_re.match(line[1:]):
+                    commits_by_path.setdefault(cur_path, set()).add(commit)
+        return commits_by_path, renamed_paths
+
+    substantive: set[str] = set()
+    commit = None
+    for line in lines:
+        if line.startswith("COMMIT "):
+            commit = line[7:]
+        elif line.startswith(("--- ", "+++ ")):
+            continue
+        elif line.startswith(("+", "-")) and commit:
+            if not audit_meta_re.match(line[1:]):
+                substantive.add(commit)
+    return substantive
+
+
 def cmd_memory_audit_scan(args: argparse.Namespace) -> None:
     """Collect evidence only; recurrence and gate activeness remain host judgments."""
     memory_dir = require_memory_enabled(args)
     root = get_repo_root()
+    audit_meta_re = re.compile(
+        r"^(last_audited|audit_notes|status|stale_reason|stale_date|hardened_into):"
+    )
+
+    def git_lines(*argv):
+        result = subprocess.run(["git", *argv], cwd=root, capture_output=True, text=True)
+        return result.stdout.splitlines() if result.returncode == 0 else None
+
+    # One batched working-tree dirty scan (-uall enumerates untracked files inside dirs).
+    dirty_res = subprocess.run(
+        ["git", "-c", "core.quotepath=false", "status", "--porcelain=v1", "-uall", "-z"],
+        cwd=root, capture_output=True, text=True,
+    )
+    dirty_paths: Optional[set[str]] = None
+    if dirty_res.returncode == 0:
+        dirty_paths = set()
+        tokens = dirty_res.stdout.split("\0")
+        idx = 0
+        while idx < len(tokens):
+            tok = tokens[idx]
+            idx += 1
+            if len(tok) < 4:
+                continue
+            status_code = tok[:2]
+            rel_path = tok[3:]
+            dirty_paths.add(rel_path)
+            if "R" in status_code or "C" in status_code:
+                if idx < len(tokens):
+                    if tokens[idx]:
+                        dirty_paths.add(tokens[idx])
+                    idx += 1
+
+    # One batched history walk over .flow/memory; fall back to --follow only for renamed files.
+    try:
+        mem_rel = memory_dir.relative_to(root).as_posix()
+    except ValueError:
+        mem_rel = str(memory_dir)
+    batch_history = git_lines(
+        "-c", "core.quotepath=false",
+        "log", "-M", "--format=COMMIT %H", "--patch", "--unified=0", "--", mem_rel,
+    )
+    if batch_history is not None:
+        batch_commits, renamed_paths = _extract_substantive_commits(
+            batch_history, audit_meta_re, by_path=True
+        )
+    else:
+        batch_commits, renamed_paths = {}, set()
+
+    module_log_cache: dict[tuple[str, str], Optional[list[str]]] = {}
+    module_dirty_cache: dict[str, Optional[bool]] = {}
+
+    def _module_is_dirty(module: str) -> Optional[bool]:
+        if module in module_dirty_cache:
+            return module_dirty_cache[module]
+        # Fall back to git's native pathspec matcher for globs/magic/parent refs.
+        if (
+            dirty_paths is None
+            or any(ch in module for ch in ("*", "?", "["))
+            or module.startswith((":(", "/"))
+            or ".." in module.replace("\\", "/").split("/")
+        ):
+            scoped = git_lines("status", "--porcelain", "--", module)
+            ans: Optional[bool] = bool(scoped) if scoped is not None else None
+            module_dirty_cache[module] = ans
+            return ans
+        norm = module.replace("\\", "/")
+        while norm.startswith("./"):
+            norm = norm[2:]
+        norm = norm.rstrip("/")
+        if not norm or norm == ".":
+            ans = bool(dirty_paths)
+        else:
+            prefix = norm + "/"
+            ans = any(p == norm or p.startswith(prefix) for p in dirty_paths)
+        module_dirty_cache[module] = ans
+        return ans
+
     entries = []
     for path in _memory_audit_paths(memory_dir):
         data = _memory_read_entry(path)
         fm = data["frontmatter"]
-        def git_lines(*argv):
-            result = subprocess.run(["git", *argv], cwd=root, capture_output=True, text=True)
-            return result.stdout.splitlines() if result.returncode == 0 else None
-        history = git_lines("log", "--follow", "--format=COMMIT %H", "--patch", "--unified=0", "--", str(path))
-        substantive = set()
-        commit = None
-        for line in history or []:
-            if line.startswith("COMMIT "):
-                commit = line[7:]
-            elif line.startswith(("--- ", "+++ ")):
-                continue
-            elif line.startswith(("+", "-")) and commit:
-                if not re.match(r"^(last_audited|audit_notes|status|stale_reason|stale_date|hardened_into):", line[1:]):
-                    substantive.add(commit)
+        try:
+            rel_entry = path.relative_to(root).as_posix()
+        except ValueError:
+            rel_entry = None
+        if batch_history is not None and rel_entry is not None and rel_entry not in renamed_paths:
+            history_ok = True
+            substantive = batch_commits.get(rel_entry, set())
+        else:
+            history = git_lines("log", "--follow", "--format=COMMIT %H", "--patch", "--unified=0", "--", str(path))
+            history_ok = history is not None
+            substantive = _extract_substantive_commits(history or [], audit_meta_re)
         module = fm.get("module")
         module_path = root / str(module) if module else None
         audited = fm.get("last_audited")
-        changes = git_lines("log", "--format=%H", f"--since={audited}T00:00:00Z", "--", str(module)) if module and audited else None
-        dirty = git_lines("status", "--porcelain", "--", str(module)) if module else None
+        if module and audited:
+            cache_key = (str(module), str(audited))
+            if cache_key not in module_log_cache:
+                module_log_cache[cache_key] = git_lines(
+                    "log", "--format=%H", f"--since={audited}T00:00:00Z", "--", str(module)
+                )
+            changes = module_log_cache[cache_key]
+        else:
+            changes = None
+        dirty = _module_is_dirty(str(module)) if module else None
         gate = str(fm.get("hardened_into") or "").split(" -- ", 1)[0]
         gate_path, _, rule = gate.partition("#")
         present = None
@@ -25738,7 +25855,7 @@ def cmd_memory_audit_scan(args: argparse.Namespace) -> None:
                         "path": str(path), "frontmatter": fm,
                         "schema_errors": validate_memory_frontmatter(fm, allow_unknown=True),
                         "recurrence": {"updates": len(re.findall(r"^## Update\b", data["body"], re.M)),
-                                       "commits": len(substantive) if history is not None else None,
+                                       "commits": len(substantive) if history_ok else None,
                                        "related_to": len(related) if isinstance(related, list) else 0},
                         "module_exists": module_path.exists() if module_path else None,
                         "module_changed": bool(changes or dirty) if changes is not None and dirty is not None else None,
@@ -25779,7 +25896,11 @@ def _memory_apply_item(memory_dir: Path, item: dict[str, Any]) -> list[str]:
     fields = item.get("set", {})
     if not isinstance(fields, dict):
         raise ValueError("set must be an object")
-    fm.update(fields)
+    for fk, fv in fields.items():
+        if fv is None:
+            fm.pop(fk, None)
+        else:
+            fm[fk] = fv
     if item.get("stamp"):
         fm["last_audited"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     target = resolve(item["move"]) if item.get("move") else source
@@ -45121,6 +45242,13 @@ def pilot_snapshot(spec_arg: str | None = None) -> dict:
 
 
 def cmd_pilot_snapshot(args: argparse.Namespace) -> None:
+    if getattr(args, "forge_only", False):
+        try:
+            forge = repo_forge(str(get_repo_root())).forge
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            error_exit(f"pilot snapshot failed: {exc}", use_json=args.json)
+        json_output({"forge": forge})
+        return
     try:
         result = pilot_snapshot(args.spec)
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
@@ -46132,7 +46260,12 @@ def _review_diff_text(repo_root: Path, base: str, head: str) -> str:
 
 
 def _materialise_review_diff(
-    repo_root: Path, receipt_id: str, base: str, head: str
+    repo_root: Path,
+    receipt_id: str,
+    base: str,
+    head: str,
+    *,
+    diff_text: Optional[str] = None,
 ) -> Path:
     """Write the reviewed range's diff to ``.flow/tmp/claude-review/`` (fn-221 R2).
 
@@ -46169,7 +46302,10 @@ def _materialise_review_diff(
         raise ReviewDiffError(
             f"review diff path escapes {expected_root}: {resolved}"
         )
-    atomic_write(leaf, _review_diff_text(repo_root, base, head))
+    atomic_write(
+        leaf,
+        diff_text if diff_text is not None else _review_diff_text(repo_root, base, head),
+    )
     return leaf
 
 
@@ -46217,7 +46353,17 @@ def _attach_review_diff(
     if review_range is None:
         return prompt
     base, head, receipt_id = review_range
-    diff_path = _materialise_review_diff(repo_root, receipt_id, base, head)
+    pre_path = getattr(args, "_review_diff_path", None)
+    if isinstance(pre_path, Path) and pre_path.is_file() and not pre_path.is_symlink():
+        diff_path = pre_path
+    else:
+        diff_path = _materialise_review_diff(
+            repo_root,
+            receipt_id,
+            base,
+            head,
+            diff_text=getattr(args, "_review_diff_text", None),
+        )
     return prompt + _diff_transport_note(diff_path, base, head, backend)
 
 
@@ -49061,7 +49207,8 @@ def _review_fanout_run_draw(
     args = argparse.Namespace(**vars(args))
     args.managed_review_request_scope = f"{sidecar_dir.name}:{axis}"
     if getattr(args, "review_range", None):
-        # One diff file per draw: a shell-less reviewer may hold it open.
+        # Preserve per-draw receipt id in review_range; _attach_review_diff reuses
+        # args._review_diff_path when a shared immutable round diff was pre-materialized.
         base_sha, head_sha, rid = args.review_range
         args.review_range = (base_sha, head_sha, f"{rid}-{axis}")
     spec = draw["spec"]
@@ -50367,8 +50514,16 @@ def _impl_review_fanout(args: argparse.Namespace) -> None:
             reservation_id, reviewed_head_sha, reviewed_base_sha,
         )
         return
-    # Claude, copilot and cursor reviewers: each draw gets the reviewed diff by path.
+    # Diff-by-path reviewers (claude, copilot, cursor, command): materialize ONE shared
+    # immutable diff file per round (using unstripped git diff bytes for both task and standalone scopes).
     args.review_range = (reviewed_base_sha, reviewed_head_sha, rid)
+    if any(d["spec"].backend in _DIFF_SESSION for d in draws):
+        try:
+            args._review_diff_path = _materialise_review_diff(
+                repo_root, rid, reviewed_base_sha, reviewed_head_sha
+            )
+        except (ReviewDiffError, OSError):
+            pass
     results = _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar)
     try:
         _review_fanout_write_meta(
@@ -51463,15 +51618,7 @@ def build_completion_review_prompt(
         review_json_tally_block=REVIEW_JSON_TALLY_BLOCK,
     )
 
-    parts = [
-        """## TERMINAL REVIEWER ROLE — execute this review directly
-
-You are the terminal reviewer, not a workflow coordinator. Review the supplied
-spec and implementation yourself. Do not invoke Flow-Next skills, run any
-`flowctl *-review` command, delegate the review, or launch another reviewer.
-Follow only the review contract below and end with exactly one verdict tag."""
-    ]
-    parts.extend(_review_target_blocks(
+    parts = list(_review_target_blocks(
         review_scope=review_scope, diff_range=diff_range,
         spec_path=spec_path, task_spec_paths=task_spec_paths,
     ))
@@ -53080,9 +53227,8 @@ _FEATURES_LAST_PROVEN_RE = re.compile(
 )
 
 
-def get_features_stale_after_commits() -> int:
-    """Configured due threshold in surface-touching commits (default 50)."""
-    raw = get_config("features.staleAfterCommits", FEATURES_DEFAULT_STALE_AFTER_COMMITS)
+def _parse_features_stale_after_commits(raw: Any) -> int:
+    """Parse features.staleAfterCommits threshold (default 50)."""
     if isinstance(raw, bool):
         return FEATURES_DEFAULT_STALE_AFTER_COMMITS
     try:
@@ -53090,6 +53236,13 @@ def get_features_stale_after_commits() -> int:
     except (TypeError, ValueError):
         return FEATURES_DEFAULT_STALE_AFTER_COMMITS
     return n if n >= 1 else FEATURES_DEFAULT_STALE_AFTER_COMMITS
+
+
+def get_features_stale_after_commits() -> int:
+    """Configured due threshold in surface-touching commits (default 50)."""
+    return _parse_features_stale_after_commits(
+        get_config("features.staleAfterCommits", FEATURES_DEFAULT_STALE_AFTER_COMMITS)
+    )
 
 
 def _features_parse_last_proven(text: str) -> tuple[str, Optional[dict]]:
@@ -53181,19 +53334,44 @@ def _features_sibling_repos(
     return siblings
 
 
-def cmd_features_status(args: argparse.Namespace) -> None:
-    """Report the feature map's seed/maintain facts; never judges or edits.
+def _compute_features_status(
+    *,
+    repo_root_override: Optional[Path] = None,
+    repo_args: Optional[list[str]] = None,
+    use_json: bool = True,
+) -> dict[str, Any]:
+    """Compute feature-map seed/maintain facts without printing."""
+    if repo_root_override is not None:
+        flow_dir = repo_root_override / FLOW_DIR
+        repo_root: Optional[Path] = repo_root_override
+        cfg_path = flow_dir / "config.json"
+        raw_cfg: dict[str, Any] = {}
+        try:
+            loaded = json.loads(cfg_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                raw_cfg = loaded
+        except (OSError, UnicodeError, ValueError):
+            raw_cfg = {}
+        raw_feat = raw_cfg.get("features") if isinstance(raw_cfg.get("features"), dict) else {}
+        threshold = _parse_features_stale_after_commits(
+            raw_feat.get("staleAfterCommits", FEATURES_DEFAULT_STALE_AFTER_COMMITS)
+        )
+        raw_mem = raw_cfg.get("memory") if isinstance(raw_cfg.get("memory"), dict) else {}
+        mem_default = bool(get_default_config().get("memory", {}).get("enabled", True))
+        mem_enabled = bool(raw_mem.get("enabled", mem_default))
+    else:
+        flow_dir = get_flow_dir()
+        threshold = get_features_stale_after_commits()
+        mem_default = bool(get_default_config().get("memory", {}).get("enabled", True))
+        mem_enabled = bool(get_config("memory.enabled", mem_default))
+        repo_root, _head, _err = _gate_repo_and_head()
 
-    A repo without `.flow/` has no map, so it reads as `seed` (prime assesses
-    uninitialised repos) rather than erroring.
-    """
-    features_dir = get_flow_dir() / "features"
-    threshold = get_features_stale_after_commits()
+    features_dir = flow_dir / "features"
     map_exists = features_dir.is_dir()
 
     open_drift: Optional[list[dict[str, str]]] = None
-    memory_dir = get_flow_dir() / MEMORY_DIR
-    if get_config("memory.enabled", False) and memory_dir.is_dir():
+    memory_dir = flow_dir / MEMORY_DIR
+    if mem_enabled and memory_dir.is_dir():
         open_drift = [
             {"id": e["entry_id"], "title": e["title"], "path": e["path"]}
             for e in _memory_iter_entries(memory_dir, track="knowledge")
@@ -53201,14 +53379,13 @@ def cmd_features_status(args: argparse.Namespace) -> None:
             and FEATURES_DRIFT_TAG in (e["tags"] or [])
         ]
 
-    repo_root, _head, _err = _gate_repo_and_head()
     base: Optional[str] = None
     if repo_root is not None:
         for candidate in [*_default_branch_candidates(repo_root), "HEAD"]:
             if _features_git(repo_root, "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"):
                 base = candidate
                 break
-    siblings = _features_sibling_repos(args.repo, repo_root, args.json)
+    siblings = _features_sibling_repos(repo_args or [], repo_root, use_json) if repo_args else []
 
     features: list[dict[str, Any]] = []
     reasons: list[str] = []
@@ -53266,19 +53443,32 @@ def cmd_features_status(args: argparse.Namespace) -> None:
 
     due = map_exists and bool(reasons)
     recommendation = "seed" if not map_exists else ("maintain" if due else "none")
+    return {
+        "map_exists": map_exists,
+        "recommendation": recommendation,
+        "due": due,
+        "reasons": reasons,
+        "open_drift": open_drift,
+        "threshold": threshold,
+        "base": base,
+        "features": features,
+        **({"repos": [name for name, _root, _base in siblings]} if siblings else {}),
+    }
+
+
+def cmd_features_status(args: argparse.Namespace) -> None:
+    """Report the feature map's seed/maintain facts; never judges or edits.
+
+    A repo without `.flow/` has no map, so it reads as `seed` (prime assesses
+    uninitialised repos) rather than erroring.
+    """
+    payload = _compute_features_status(repo_args=args.repo, use_json=args.json)
     if args.json:
-        json_output({
-            "map_exists": map_exists,
-            "recommendation": recommendation,
-            "due": due,
-            "reasons": reasons,
-            "open_drift": open_drift,
-            "threshold": threshold,
-            "base": base,
-            "features": features,
-            **({"repos": [name for name, _root, _base in siblings]} if siblings else {}),
-        })
+        json_output(payload)
         return
+    recommendation = payload["recommendation"]
+    reasons = payload["reasons"]
+    open_drift = payload["open_drift"]
     if recommendation == "seed":
         print("No feature map: run /flow-next:features to seed .flow/features/")
     elif recommendation == "maintain":
@@ -56779,6 +56969,44 @@ def _prime_collect_hooks(
     return ({"hooks": results, "hook_source_count": len(results)}, c)
 
 
+def _prime_collect_features_status(root: Path) -> "tuple[dict[str, Any], _PrimeCollector]":
+    col = _PrimeCollector("substance-features-status", budget=20)
+    try:
+        full = _compute_features_status(repo_root_override=root, use_json=True)
+        col.op(1)
+        data = {
+            "map_exists": full["map_exists"],
+            "recommendation": full["recommendation"],
+            "due": full["due"],
+            "reasons": full["reasons"],
+        }
+    except Exception as exc:  # defensive: prime classify never crashes on a collector
+        col.fail(f"features_status failed: {exc}")
+        data = {"map_exists": False, "recommendation": "seed", "due": False, "reasons": []}
+    return data, col
+
+
+def _prime_collect_glossary_terms(root: Path) -> "tuple[dict[str, Any], _PrimeCollector]":
+    col = _PrimeCollector("substance-glossary-terms", budget=10)
+    total = 0
+    files: list[str] = []
+    try:
+        resolved_root = root.resolve()
+        cwd = Path.cwd().resolve()
+        start = cwd if (cwd == resolved_root or resolved_root in cwd.parents) else resolved_root
+        paths = find_all_glossaries(start=start)
+        if not paths and (resolved_root / GLOSSARY_FILE).is_file():
+            paths = [resolved_root / GLOSSARY_FILE]
+        for candidate in paths:
+            col.op(1)
+            entries = _glossary_load(candidate)
+            total += len(entries)
+            files.append(str(candidate))
+    except Exception as exc:  # defensive: prime classify never crashes on a collector
+        col.fail(f"glossary_terms failed: {exc}")
+    return {"file_count": len(files), "total_terms": total}, col
+
+
 def _prime_collect_substance(
     root: Path,
     deduped: "list[str]",
@@ -56809,6 +57037,8 @@ def _prime_collect_substance(
     large, large_c = _prime_collect_large_files(root, deduped)
     runtime, rt_c = _prime_collect_runtime_currency(root)
     hooks, hooks_c = _prime_collect_hooks(root, deduped)
+    feat_st, feat_c = _prime_collect_features_status(root)
+    gloss_t, gloss_c = _prime_collect_glossary_terms(root)
 
     substance = {
         "type_strictness": strictness,       # SV3
@@ -56828,10 +57058,13 @@ def _prime_collect_substance(
         "atomic_pairs": atomic,              # LEG6
         "tool_managed": tool_managed,        # LEG7
         "hooks": hooks,                      # HP7
+        "features_status": feat_st,          # Feature map line
+        "glossary_terms": gloss_t,           # DC8
     }
     collectors = [
         strict_c, cov_c, env_c, setup_c, devc_c, docs_c, large_c, ci_c, sec_c,
         destr_c, api_c, cfg_c, rt_c, enc_c, atomic_c, tm_c, hooks_c,
+        feat_c, gloss_c,
     ]
     return (substance, collectors)
 
@@ -57361,6 +57594,14 @@ def main() -> None:
     # hosts that integrity-check the plugin cache (Muse Code) disable it.
     sys.dont_write_bytecode = True
     _reconfigure_stdio_utf8()
+    _locale = (
+        os.environ.get("LC_ALL")
+        or os.environ.get("LC_MESSAGES")
+        or os.environ.get("LANG")
+        or ""
+    )
+    if not _locale or _locale in ("C", "POSIX") or _locale.startswith(("C.", "en")):
+        argparse._ = lambda s: s
     parser = argparse.ArgumentParser(
         description="flowctl - CLI for .flow/ task tracking",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -58127,6 +58368,7 @@ def main() -> None:
 
     p_pilot_snapshot = pilot_sub.add_parser("snapshot", help="Read the complete pilot hop state")
     p_pilot_snapshot.add_argument("--spec")
+    p_pilot_snapshot.add_argument("--forge-only", action="store_true", help="Return only the origin forge without listing PRs or scanning specs")
     p_pilot_snapshot.add_argument("--json", action="store_true")
     p_pilot_snapshot.set_defaults(func=cmd_pilot_snapshot)
 

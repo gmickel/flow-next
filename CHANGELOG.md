@@ -4,6 +4,17 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## Unreleased
+
+### Changed
+
+- **Faster startup, forge checks, and memory audits.** `flowctl --help` now takes its authenticated static fast path on Python 3.11 through 3.13 as well as 3.14, and default C/English locales skip `argparse` gettext catalog probes. `flowctl memory audit-scan` batches git status and `.flow/memory/` history into one pass (about 5x faster on mature stores). `resolve-pr` and `land` resolve the forge locally via `flowctl pilot snapshot --forge-only` instead of listing all PRs and specs; `make-pr` skips unnecessary `ssh -G`, duplicate `show` calls, empty `closed-in-range` checks, and update-mode sleep; `resolve-pr` paginates only unexhausted threads over stdin and skips full-PR fetches in targeted mode.
+- **Leaner skill context and single-reviewer fast paths.** Open-spec and open-task recipes filter out closed history before printing, unbounded `memory search` calls cap results at 10, `docs-gap-scout` filters glossary lookups with `--match`, and `qa` drops its link to `docs/flowctl.md`. Single-reviewer CLI `impl-review` rounds invoke `flowctl <backend> impl-review` directly instead of the two-phase fan-out merge, fan-out rounds materialize one shared diff per round, and CLI `plan-review` and `spec-completion-review` dispatch directly from each skill's CLI fast path without loading separate per-backend markdown files.
+
+### Fixed
+
+- **Review re-review preambles and effort fallbacks.** Plan re-review preambles no longer tell the read-only reviewer to run `flowctl task set-spec`, completion re-reviews apply the convergence ratchet closing when prior findings are present instead of asking for full re-verification, completion review prompts drop the duplicate terminal role header, and fallback effort strings in `run_codex_exec` and `run_copilot_exec` match the `medium` registry default.
+
 ## [flow-next 9.19.0] - 2026-11-22
 
 Agents that another agent briefs to build a spec now build it, instead of stopping to plan it into tasks. Since 9.8.0 a plan is something a person asks for, but the block that setup writes into `CLAUDE.md` and `AGENTS.md` still said to run plan after creating a spec. An agent handed a brief such as "create a spec from this and deliver it" read that line as the request for a plan and went to plan. The plan skill now describes itself as a task breakdown that runs only when a person asks for a plan or a task breakdown, or when flow routes there, and never for a request to build, implement or deliver a spec, whoever sends it. That description ships with the plugin, so updating the plugin fixes this for most projects before you change any file. On the release build, with the old block still in `CLAUDE.md`, all 6 Claude Code sessions (Opus 5.5) briefed to create and deliver a spec took the direct route to work without planning (each run was stopped at that hand-off, so no build was run), and 3 of 3 explicit asks for a plan still planned.

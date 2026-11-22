@@ -6,22 +6,34 @@
 
 **Targeted mode** — narrow `FEEDBACK_JSON` to the single item identified by the URL.
 
-For `TARGETED_TYPE=review_thread` (inline review comment):
+For `TARGETED_TYPE=review_thread` (inline review comment) — Phase 1 skipped `get-pr-comments`; resolve the comment's thread directly and build a minimal single-thread feedback payload:
 
 ```bash
-COMMENT_NODE_ID=$(gh api "repos/$OWNER/$REPO/pulls/comments/$COMMENT_REST_ID" --jq .node_id)
-THREAD_JSON=$(bash "$SCRIPTS/get-thread-for-comment" "$PR_NUMBER" "$COMMENT_NODE_ID" "$OWNER/$REPO")
-THREAD_ID=$(jq -r .id <<<"$THREAD_JSON")
-# Keep only the matching thread; drop pr_comments + review_bodies; zero cross-invocation signal.
-FEEDBACK_JSON=$(jq --arg tid "$THREAD_ID" '
-  .review_threads |= map(select(.id == $tid))
-  | .pr_comments = []
-  | .review_bodies = []
-  | .cross_invocation = {signal: false, resolved_threads: []}
-' <<<"$FEEDBACK_JSON")
+COMMENT_NODE_ID=$(gh api "repos/$OWNER/$REPO/pulls/comments/$COMMENT_REST_ID" --jq .node_id) || exit 1
+THREAD_JSON=$(bash "$SCRIPTS/get-thread-for-comment" "$PR_NUMBER" "$COMMENT_NODE_ID" "$OWNER/$REPO") || exit 1
+if [[ -n "$THREAD_JSON" ]]; then
+  FEEDBACK_JSON=$(printf '%s\n' "$THREAD_JSON" | jq --arg pr "$PR_NUMBER" '
+    {
+      pr_number: ($pr | tonumber),
+      # GitHub can surface open review threads as either false or null.
+      # Treat only literal true as resolved (same predicate as get-pr-comments).
+      review_threads: (if .isResolved == true then [] else [del(.isResolved)] end),
+      pr_comments: [],
+      review_bodies: [],
+      cross_invocation: (
+        if .isResolved == true then
+          {signal: true, resolved_threads: [{id: .id, path: .path, line: (.line // .originalLine)}]}
+        else
+          {signal: false, resolved_threads: []}
+        end
+      )
+    }')
+else
+  FEEDBACK_JSON=$(jq -n --arg pr "$PR_NUMBER" '{pr_number: ($pr | tonumber), review_threads: [], pr_comments: [], review_bodies: [], cross_invocation: {signal: false, resolved_threads: []}}')
+fi
 ```
 
-For `TARGETED_TYPE=pr_comment` (top-level PR comment) — bypass thread lookup entirely, fetch the single comment via REST and build a minimal feedback payload:
+For `TARGETED_TYPE=pr_comment` (top-level PR comment) — Phase 1 skipped `get-pr-comments`; fetch the single comment via REST and build a minimal feedback payload:
 
 ```bash
 PR_COMMENT_JSON=$(gh api "repos/$OWNER/$REPO/issues/comments/$COMMENT_REST_ID" \

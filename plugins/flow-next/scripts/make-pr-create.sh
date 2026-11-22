@@ -26,7 +26,9 @@ if [[ "$PUSH_RC" -ne 0 ]]; then
   echo "$PUSH_OUT" >&2
   exit 1
 fi
-sleep 1   # GitHub API eventual-consistency lag (cli/cli #2691)
+if [[ "${UPDATE_MODE:-0}" != "1" && -z "${PR_READ:-}" ]]; then
+  sleep 1   # GitHub API eventual-consistency lag on fresh PR create (cli/cli #2691)
+fi
 if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
   if [[ -n "${PR_READ:-}" ]]; then
     # A failed read is a failure, never "no open pull request".
@@ -59,7 +61,12 @@ if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
       echo "Error: updating $PR_LABEL failed." >&2; exit 1; }
     echo "Updated $PR_LABEL description (refreshed against the current diff)." >&2
   elif gh pr edit "$UPDATE_PR_NUMBER" --body-file "$BODY_FILE"; then
-    PR_URL=$(gh pr view "$UPDATE_PR_NUMBER" --json url --jq '.url')
+    EXISTING_TRIM="${EXISTING%/}"
+    if [[ -n "$EXISTING_TRIM" && "${EXISTING_TRIM##*/}" == "$UPDATE_PR_NUMBER" ]]; then
+      PR_URL="$EXISTING"
+    else
+      PR_URL=$(gh pr view "$UPDATE_PR_NUMBER" --json url --jq '.url')
+    fi
     echo "Updated PR #$UPDATE_PR_NUMBER body (refreshed against the current diff)." >&2
   else
     echo "Error: gh pr edit #$UPDATE_PR_NUMBER --body-file failed." >&2
@@ -69,7 +76,7 @@ fi
 # end:block
 if [[ "${UPDATE_MODE:-0}" != "1" ]]; then
 BASE_BRANCH="${BASE_REF#origin/}"
-TRK_ACTIVE=$("$FLOWCTL" sync active --json 2>/dev/null | jq -r '.active // empty' 2>/dev/null || true)
+TRK_ACTIVE=$("$FLOWCTL" sync active --json 2>/dev/null | jq -r 'if .active == null then "" else (.active | tostring) end' 2>/dev/null || true)
 if [ "$TRK_ACTIVE" = "true" ]; then
   TRK_TYPE=$("$FLOWCTL" config get tracker.type --json 2>/dev/null | jq -r '.value // empty' 2>/dev/null || true)
   TRK_STATE=$("$FLOWCTL" sync get-state "$SPEC_ID" --json 2>/dev/null || printf '{}')

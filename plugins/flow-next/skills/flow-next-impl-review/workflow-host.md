@@ -2,26 +2,18 @@
 
 Use when `BACKEND="host"`. Prerequisite: SKILL.md's setup has resolved `BACKEND`, and [other-paths.md](other-paths.md) has set `FLOWCTL` and (optionally) `TASK_ID` / `BASE_COMMIT`.
 
-`host` is a NON-EXECUTABLE selection sentinel. Review runs as a host-native fresh-context subagent (skill-owned judgment). No `flowctl host` subcommand, no subprocess path, no model/effort on the backend string — pins live in the model-routing block of the instruction file that holds it (CLAUDE.md on Claude Code and Droid, AGENTS.md elsewhere).
+`host` is a NON-EXECUTABLE selection sentinel. Review runs as a host-native fresh-context subagent (skill-owned judgment). Never call a non-existent `flowctl host` subcommand or pass `host:<model>` (flowctl rejects it): pins live in the model-routing block of the instruction file (CLAUDE.md on Claude Code and Droid, AGENTS.md elsewhere).
 
 ## Critical rules
 
 1. **The coordinator never reviews code itself** — you coordinate; a fresh-context host-native subagent reviews. A verdict formed without that subagent's response has broken this
 2. Pin the subagent to a **cross-family** model slug (family that did **not** write the diff)
-3. Every re-review is a **fresh subagent** — no context reuse, no fabricated resume ids
-4. Receipt records actual reviewer model + `"mode": "host"`
+3. Every re-review is a **fresh subagent** — no context reuse, no fabricated resume ids; always pass prior findings in the prompt
+4. Receipt records actual reviewer model, `"mode": "host"`, `"session_id": null`, and full `review` text (feeds the re-review convergence ratchet)
 5. Fail closed when no cross-family pin is available (never silent same-family self-review)
-6. **`host` never shells out to another CLI** — a `codex exec` / `cursor-agent` / `claude -p` / `grok` subprocess inside a host review is a broken run; the CLI backends exist for exactly that, and the user chose `host` to avoid them. Dispatch through the harness's own subagent primitive with the model named in the dispatch; an unhonored model request degrades to the session model, and then rule 5 decides — never a CLI fallback
+6. **`host` never shells out to another CLI** — a `codex exec` / `cursor-agent` / `claude -p` / `grok` subprocess inside a host review is a broken run; dispatch through the harness's own read-only subagent primitive. An unhonored model request degrades to the session model, and rule 5 decides — never a CLI fallback
 
-
-**Host re-reviews always carry the prior findings in the generated prompt.** Rule 3
-makes each re-review a fresh subagent with `session_id: null`, so the reviewer holds
-nothing from the previous round.
-
-Everything else on the identities side still applies: point the subagent at the
-`base..head` range and the changed-path list and let it read the diff and the
-spec from the checkout itself. Do not paste diff hunks or spec bodies into the
-subagent prompt — it has the same repository you do.
+Point the subagent at the `base..head` range, changed-path list, and spec path; do not paste diff hunks or spec bodies into the prompt — it has the same repository you do.
 
 ## Step 1: Resolve cross-family pin
 
@@ -35,7 +27,7 @@ subagent prompt — it has the same repository you do.
 
 ## Step 2: Dispatch read-only reviewer subagents
 
-The reviewer subagent is the **reviewer** tier — a verdict from the writer's own family is not an independent one. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
+The reviewer subagent is the **reviewer** tier — a verdict from the writer's own family is not an independent one. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.** How this harness reaches that model — and what degrades when it cannot — lives in [`docs/reach/README.md`](../../docs/reach/README.md); a single-family harness fails closed per Step 1 (cross-family then comes through a bridge backend).
 
 **First round of a scope = the panel rule in [SKILL.md](SKILL.md).** The first
 review round dispatches **one** fresh read-only reviewer subagent (the correctness
@@ -195,25 +187,7 @@ defaults to the standard three same-pin draws.
 
 ### Round 2+: one fresh subagent, merged container injected
 
-Every re-review dispatches exactly **one** fresh read-only subagent — host
-sessions are never resumed: no context reuse, no fabricated resume
-ids. Inject the FULL merged prior-finding container from the previous round's
-receipt into its prompt (every merged ordinal present, rendered as structured
-`findings.items`) — the fresh subagent holds nothing from
-the draws that authored those findings.
-
-The `REVIEW_HEAD_SHA` / `REVIEW_BASE_SHA` anchors bound in the fence above are
-the reviewed range; retain them (re-`source "$REVIEW_SNAPSHOT_FILE"` in any
-later block) through receipt writing.
-
-The reviewer runs on the **reviewer tier**. Resolution order: an explicit
-instruction in the invocation, then the project routing block in the
-instruction file, then the agent definition's own default, then the session
-model. How *this* harness reaches that model - and what degrades when it
-cannot - is its reach page: [`docs/reach/README.md`](../../docs/reach/README.md).
-A harness that reaches only one model family natively fails closed when the
-writer shares that family (interactive -> ask; autonomous -> `NEEDS_HUMAN`);
-cross-family then comes through a bridge backend.
+Every re-review dispatches **one** fresh read-only subagent with the full merged prior-finding container (`findings.items`) injected from the previous receipt. Retain `REVIEW_HEAD_SHA` / `REVIEW_BASE_SHA` (re-`source "$REVIEW_SNAPSHOT_FILE"` in later blocks) through receipt writing.
 
 Read-only is enforced by TOOLS, never by prompt: dispatch through a read-only
 agent definition or the host's read-only subagent mode
@@ -221,9 +195,6 @@ agent definition or the host's read-only subagent mode
 mutation-capable subagent, because the reviewer reads untrusted diff content. Where the host cannot
 enforce it, say so in the receipt: pin and read-only enforcement are
 host-dependent. The dispatch prompt additionally states working-tree conduct: the reviewer never runs a mutating command (`git checkout`/`restore`/`clean`/`stash`, shell file writes) - tool fences do not cover the shell, and uncommitted state it finds is evidence to report, never something to repair.
-
-Receipt in every case: `mode: "host"`, the actual reviewer model,
-`session_id: null`.
 
 Render each dispatch file with the same builder the CLI backends use:
 
@@ -315,22 +286,14 @@ Write a receipt compatible with existing consumers:
 ```
 
 `draws[]` appears on the first (fan-out) round only — one entry per dispatched
-draw, honestly recording each draw's axis, model, `session_id` (always null on
-host), verdict, and failed flag, including the draws that returned nothing
-(`"failed": true`, `"verdict": null`). `review` carries the MERGED document.
-This is the host path's equivalent of the CLI fan-out receipt: the same
-top-level shape plus the same honesty about what actually ran. Re-review
-receipts (single fresh subagent) carry no `draws[]`.
-
-`session_id` is literal `null` — deliberate: host re-reviews are always fresh subagents, and `null` distinguishes "no resumable session by design" from an accidentally incomplete receipt. `review` carries the reviewer's full output — the re-review ratchet reads it to inject prior findings into the next fresh subagent (convergence), so a host receipt that omits `review` has broken the convergence ratchet.
+draw, recording each draw's axis, model, `session_id: null`, verdict, and `failed` flag (including draws that returned nothing: `"failed": true`, `"verdict": null`). `review` carries the merged document (first round) or single re-review output. Re-review receipts carry no `draws[]`.
 
 Write that base JSON to a temporary input file and persist the full reviewer
 output (first round: the MERGED document, `$REVIEW_OUTPUT_FILE`) to a second
 temporary file. Finalize the captured reservation first, then attach from that
 journaled payload so host receipts follow the same lineage/currentness
 contract as subprocess backends. **On a fan-out round this runs ONCE, after
-the merge, against the one reservation from Step 2's fence — never once per
-draw (three cap slots for one merged round would triple-charge the cap):**
+the merge, against the one reservation from Step 2's fence (never once per draw):**
 
 ```bash
 if [[ -z "$TASK_ID" ]]; then
@@ -384,8 +347,6 @@ The command reads the prior receipt before atomically replacing it. Unsupported
 or legacy prose preserves the base receipt without a `findings` field; no extra
 reviewer, model, or network call occurs.
 
-Host re-reviews always spawn a new subagent. Do not invent a `session_id` for resume. Shape stays compatible with convergence/cap/flow --auto/land consumers (`mode`, `verdict`, `model`, `timestamp`).
-
 ## Step 4: Optional phases
 
 When `--deep` / `--validate` / `--interactive` flags are set, run the gated phases from [optional-phases.md](optional-phases.md) where they apply. Host has no `flowctl host deep-pass` / `validate` — if those paths require a subprocess backend, either:
@@ -418,16 +379,3 @@ run.
 - Dispatch, malformed-verdict, or receipt failure: output
   `RETRY: no verdict (backend or transport failure)` and stop. Never self-issue a verdict or switch
   backends.
-
-## Anti-patterns (Host backend)
-
-- **Self-reviewing** — coordinator never grades its own diff
-- **Silent same-family self-review** when no cross-family pin is available
-- **Reusing a prior subagent context** for re-review (always fresh)
-- **Putting a model on the backend string** (`host:<model>`) — rejected by flowctl; the model is named on the `reviewer` tier of the model-routing block
-- **Calling a non-existent `flowctl host` command**
-- **Fabricating resume/session ids** for host receipts
-- **Three cap slots for one merged round** — one increment before the draws, one record/attach after the merge
-- **Presenting the draws verbatim instead of merging** — the draws feed one fix pass
-- **Fanning out on round 2+** — re-reviews are one fresh subagent with the merged container injected
-- **Judging away a draw's verdict** — synthesis is mechanical worst-wins; only the empty-merged-findings wedge escalates

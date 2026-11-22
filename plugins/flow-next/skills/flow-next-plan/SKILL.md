@@ -22,19 +22,6 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-Check once for flowctl copies left by an older install layout:
-
-```bash
-LEFTOVERS=""
-for p in .flow/bin/flowctl .flow/bin/flowctl.cmd .flow/bin/flowctl.py \
-         .flow/bin/flowctl_bootstrap.py .flow/bin/flowctl-help.txt \
-         .flow/bin/flowctl_tracker .flow/templates/spec.md .flow/usage.md; do
-  [ -e "$p" ] && LEFTOVERS="${LEFTOVERS}${p}"$'\n' || true
-done   # || true: an empty LEFTOVERS (the normal case) must read as success
-```
-
-None present: say nothing. Any present: print one line saying nothing reads them and they can be deleted by hand or by `/flow-next:setup`, then continue. Never ask, stop, or delete here.
-
 ## No implementation code
 
 The spec states what and why as contracts; each task states how: named files, the repo pattern to follow (`file:line`), ordering, and non-obvious gotchas. Code in a plan is limited to signatures and interfaces, pointers to existing patterns, a recent or surprising API from docs-scout, and a gotcha from practice-scout. A full function or module body, or a copy-paste block over about 10 lines, has broken this: implementation happens in `/flow-next:work` with fresh context, and code written here is paid for again there and drifts.
@@ -60,13 +47,21 @@ A ready or captured spec is plan input. An unshaped, oversized idea with several
 **Review.** `--review=codex` ("review with codex", "codex review", "use codex"), `--review=host` ("host review", "use host": the host-native fresh-context reviewer), `--review=none` or `--no-review` ("no review", "skip review").
 
 
-Initialize and capture one preflight snapshot before routing or scouting (also under autonomy), from the repository root (never this skill's directory, where flowctl finds no config). Every later config read uses this literal path:
+Initialize, check for flowctl copies left by an older install layout, and capture one preflight snapshot before routing or scouting (also under autonomy), from the repository root (never this skill's directory, where flowctl finds no config). Every later config read uses this literal path:
 
 ```bash
 $FLOWCTL init --json
+LEFTOVERS=""
+for p in .flow/bin/flowctl .flow/bin/flowctl.cmd .flow/bin/flowctl.py \
+         .flow/bin/flowctl_bootstrap.py .flow/bin/flowctl-help.txt \
+         .flow/bin/flowctl_tracker .flow/templates/spec.md .flow/usage.md; do
+  [ -e "$p" ] && LEFTOVERS="${LEFTOVERS}${p}"$'\n' || true
+done   # || true: an empty LEFTOVERS (the normal case) must read as success
 PLAN_CFG="${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json"
 $FLOWCTL preflight --json > "$PLAN_CFG" || printf '{"key":null,"value":{}}' > "$PLAN_CFG"
 ```
+
+If `LEFTOVERS` is non-empty, print one line saying nothing reads them and they can be deleted by hand or by `/flow-next:setup`, then continue (never ask, stop, or delete here); if empty, say nothing.
 
 Plan asks no setup question: flags win, depth takes its default, and review uses the configured
 backend from the snapshot (`.probes.review_backend.value.backend`). When that reads `ASK` (nothing

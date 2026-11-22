@@ -13,7 +13,8 @@ whichever scheduler runs):
 
 ```bash
 $FLOWCTL config get planSync.enabled --json
-$FLOWCTL tasks --spec <spec-id> --json   # SPEC_MODE: open tasks + depends_on
+# Reuse the tasks array from Phase 1's `$FLOWCTL show <spec-id> --json` when already in hand;
+# otherwise fetch open tasks + depends_on with `$FLOWCTL tasks --spec <spec-id> --json`.
 ```
 
 Take the **wave route** (3a-3g below) when ANY of these hold:

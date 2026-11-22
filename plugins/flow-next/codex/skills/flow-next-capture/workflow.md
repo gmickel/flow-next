@@ -35,9 +35,9 @@ Catch what makes capture unsafe before drafting: a duplicate spec, relevant evid
 
 ### 0.2 — Duplicate detection
 
-Pull up to 10 distinctive keywords from the user's turns (repeated proper nouns, file paths, multi-word domain phrases, quoted terms). Compare them against the titles of open specs (`status == "open"`) in `.flow/specs/*.json`; a done spec is shipped work, not a duplicate. Another session's spec on an unmerged branch counts too: run `"$FLOWCTL" specs --refs --json` (read-only, no network) and also compare against the titles of the open specs its `summary.branch_only` lists. If it fails, use the working-tree set alone. A branch-only match is recorded with its ref from `live`; extending or superseding it happens in a checkout of that ref. Count **strong matches** (shared proper nouns, paths, or phrases, not common words): 0-1 is no conflict, 2 is a potential duplicate (`proceed-anyway` recommended), 3+ is likely (`extend` or `supersede` recommended). Record the matched ids and titles for §0.5. (Pre-1.0 `.flow/epics/` repos: port first per `flowctl usage`.)
+Pull up to 10 distinctive keywords from the user's turns (repeated proper nouns, file paths, multi-word domain phrases, quoted terms). Compare them against the titles of open specs (`status == "open"`) in `.flow/specs/*.json`; a done spec is shipped work, not a duplicate. Another session's spec on an unmerged branch counts too: run `"$FLOWCTL" specs --refs --json | jq -c '{branch_only: (.summary.branch_only // []), active: [.specs[]? | select(.status == "open" or ((.live // []) | length) > 0) | {id, title, status, live}]}'` (read-only, no network) and also compare against the titles of the open specs its `branch_only` lists. If it fails, use the working-tree set alone. A branch-only match is recorded with its ref from `live`; extending or superseding it happens in a checkout of that ref. Count **strong matches** (shared proper nouns, paths, or phrases, not common words): 0-1 is no conflict, 2 is a potential duplicate (`proceed-anyway` recommended), 3+ is likely (`extend` or `supersede` recommended). Record the matched ids and titles for §0.5. (Pre-1.0 `.flow/epics/` repos: port first per `flowctl usage`.)
 
-Then run `"$FLOWCTL" memory search "<keyword>" --json --limit 5` for the top three keywords. Hits are advisory: list them as `Related context:` in the summary; they never trigger the duplicate branch. Skip silently when memory is not initialized.
+When the preflight snapshot shows `.value.memory.enabled == true`, run `"$FLOWCTL" memory search "<keyword>" --json --limit 5` for the top three keywords. Hits are advisory: list them as `Related context:` in the summary; they never trigger the duplicate branch. Skip when memory is disabled or uninitialized.
 
 ### 0.3b — Strategy gate
 
@@ -169,7 +169,7 @@ Write the complete body once to `${TMPDIR:-/tmp}/flow-capture-draft-<working-tit
 
 ### 4.2 — Snapshot readiness before writing
 
-Under `from:flow`, skip this step and §5.9: flow builds the spec in this session and never asks about readiness.
+Under `from:flow`, `from:goal`, or `from:issue`, skip this step and §5.9: those callers own readiness and never ask interactively about it.
 
 Otherwise read [references/readiness-snapshot.md](references/readiness-snapshot.md) and take its
 snapshot before writing.
@@ -282,9 +282,7 @@ Best-effort: a refusal (the spec already has tasks, reachable only on a `--rewri
 
 ## Phase 6: Close
 
-**Tracker-sync check first.** Run a fresh `$FLOWCTL sync active --json` now (the preflight
-snapshot can be stale). Only when it parses and reads `active: false`: skip the check and print no
-`Tracker sync:` line. Otherwise, including a probe error: read
+**Tracker-sync check first.** When §5.2's tracker gate did not fire (preflight `.probes.tracker.status == "ok"` and `.probes.tracker.value.active == false`, so no tracker integration ran during capture), skip the check and print no `Tracker sync:` line. Otherwise (including a preflight probe error, or when §5.2's tracker gate fired), run a fresh `$FLOWCTL sync active --json`: only when it parses and reads `active: false` skip and print no `Tracker sync:` line; otherwise read
 [references/tracker-integration.md § Phase 6 — sync check](references/tracker-integration.md#phase-6-sync-check)
 and run it.
 

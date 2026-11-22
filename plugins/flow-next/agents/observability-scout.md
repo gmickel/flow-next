@@ -16,73 +16,37 @@ Observability helps debug issues in production. While not directly affecting age
 
 ## Scan Targets
 
-> **Manifests recurse.** `grep pkg */package.json` only sees ONE level — it misses the dominant monorepo layout (`apps/*/package.json`, `packages/*/package.json`, deeper). Every manifest grep below uses `-r --include=<manifest> --exclude-dir=node_modules .` so it finds nested workspaces and never scans installed deps.
+> **Manifests recurse in one pass per type.** `grep pkg */package.json` misses nested monorepo workspaces (`apps/*/package.json`, `packages/*/package.json`). Run one combined manifest grep per language/type instead of one recursive walk per library, excluding dependency directories.
 
-### Structured Logging (OB1)
-
-```bash
-# JS/TS + Python + Go (recursive across workspaces, deps excluded)
-grep -rE "winston|pino|bunyan|log4js" --include=package.json --exclude-dir=node_modules . 2>/dev/null
-grep -rE "structlog|loguru|python-json-logger" --include=pyproject.toml --include=requirements*.txt --exclude-dir={.venv,node_modules} . 2>/dev/null
-grep -rE "zap|logrus|zerolog|slog" --include=go.mod . 2>/dev/null
-
-# Logging config files
-find . -path '*/node_modules' -prune -o \( -name 'logback.xml' -o -name 'log4j*.xml' -o -name 'logging.config.*' \) -print 2>/dev/null | head
-```
-
-### Distributed Tracing (OB2)
+### Manifest & Config Scan (OB1–OB6 in one batched pass)
 
 ```bash
-# OpenTelemetry across JS/Python/Go (Go OTel lives in go.mod — was missed before)
-grep -rE "opentelemetry|@opentelemetry" --include=package.json --include=pyproject.toml --exclude-dir=node_modules . 2>/dev/null
-grep -rE "go\.opentelemetry\.io" --include=go.mod . 2>/dev/null
+# 1. JS/TS manifests (OB1 logging, OB2 OTel, OB3 metrics, OB4 errors, OB5 health libs, OB6 alerting)
+grep -rE "winston|pino|bunyan|log4js|@?opentelemetry|prom-client|prometheus|dd-trace|datadog|@?newrelic|statsd|hot-shots|@sentry|@?bugsnag|rollbar|terminus|lightship|healthcheck|@?pagerduty|opsgenie" \
+  --include=package.json --exclude-dir={node_modules,.git,dist} . 2>/dev/null
 
-# Trace ID propagation in OWN source (exclude deps — many HTTP libs mention these headers → false PASS)
-grep -rE "X-Request-ID|X-Trace-ID|traceparent|correlation.id" --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --exclude-dir={node_modules,vendor,dist} . 2>/dev/null | head -10
-```
+# 2. Python manifests (OB1–OB4)
+grep -rE "structlog|loguru|python-json-logger|opentelemetry|prometheus_client|prometheus|ddtrace|datadog|newrelic|sentry-sdk|sentry_sdk|bugsnag|rollbar" \
+  --include=pyproject.toml --include=requirements*.txt --exclude-dir={.venv,node_modules,.git} . 2>/dev/null
 
-### Metrics Collection (OB3)
+# 3. Go manifests (OB1–OB4)
+grep -rE "zap|logrus|zerolog|slog|go\.opentelemetry\.io|prometheus|prometheus/client|sentry-go|bugsnag|rollbar" \
+  --include=go.mod --exclude-dir={vendor,.git} . 2>/dev/null
 
-```bash
-# Prometheus / Datadog / NewRelic / StatsD (recursive, deps excluded)
-grep -rE "prom-client|prometheus|prometheus_client|prometheus/client" --include=package.json --include=pyproject.toml --include=go.mod --exclude-dir=node_modules . 2>/dev/null
-grep -rE "dd-trace|datadog|ddtrace" --include=package.json --include=pyproject.toml --exclude-dir=node_modules . 2>/dev/null
-grep -rE "newrelic|@newrelic" --include=package.json --include=pyproject.toml --exclude-dir=node_modules . 2>/dev/null
-grep -rE "statsd|hot-shots" --include=package.json --exclude-dir=node_modules . 2>/dev/null
-```
+# 4. Logging & alerting config files (find, not ** glob)
+find . \( -name node_modules -o -name .git -o -name .venv -o -name vendor \) -prune -o \
+  \( -name 'logback.xml' -o -name 'log4j*.xml' -o -name 'logging.config.*' -o -name 'alerts.yml' -o -name 'alertmanager.yml' -o -name 'alert-rules.yml' \) \
+  -print 2>/dev/null | head -20
 
-### Error Tracking (OB4)
+# 5. Source-code signals in OWN source (independent caps so trace hits never hide health routes)
+grep -rE "X-Request-ID|X-Trace-ID|traceparent|correlation.id" \
+  --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --exclude-dir={node_modules,vendor,dist,.git,.venv} . 2>/dev/null | head -10
+grep -rE "/health|/healthz|/ready|/live|/ping" \
+  --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --exclude-dir={node_modules,vendor,dist,.git,.venv} . 2>/dev/null | head -10
 
-```bash
-# Sentry / Bugsnag / Rollbar (recursive, deps excluded)
-grep -rE "@sentry|sentry-sdk|sentry_sdk|sentry-go" --include=package.json --include=pyproject.toml --include=go.mod --exclude-dir=node_modules . 2>/dev/null
-grep -rE "bugsnag|@bugsnag" --include=package.json --include=pyproject.toml --exclude-dir=node_modules . 2>/dev/null
-grep -rE "rollbar" --include=package.json --include=pyproject.toml --exclude-dir=node_modules . 2>/dev/null
-```
-
-### Health Endpoints (OB5)
-
-```bash
-# Health check routes in OWN source
-grep -rE "/health|/healthz|/ready|/live|/ping" --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --exclude-dir={node_modules,vendor,dist} . 2>/dev/null | head -10
-
-# Health check libraries (recursive)
-grep -rE "terminus|lightship|healthcheck" --include=package.json --exclude-dir=node_modules . 2>/dev/null
-
-# Health declared in infra, not routes: Docker HEALTHCHECK + k8s liveness/readiness probes
-grep -rEl "HEALTHCHECK" --include=Dockerfile* --exclude-dir=node_modules . 2>/dev/null | head
-grep -rE "livenessProbe|readinessProbe" --include=*.yaml --include=*.yml --exclude-dir=node_modules . 2>/dev/null | head
-```
-
-### Alerting (OB6)
-
-```bash
-# PagerDuty / OpsGenie (recursive)
-grep -rE "pagerduty|@pagerduty" --include=package.json --exclude-dir=node_modules . 2>/dev/null
-grep -rE "opsgenie" --include=package.json --exclude-dir=node_modules . 2>/dev/null
-
-# Alert configuration files (find, not ** glob — globstar is off in non-interactive bash)
-find . -path '*/node_modules' -prune -o \( -name 'alerts.yml' -o -name 'alertmanager.yml' -o -name 'alert-rules.yml' \) -print 2>/dev/null | head
+# 6. Infra health checks (OB5: Docker HEALTHCHECK + k8s liveness/readiness probes)
+grep -rEl "HEALTHCHECK" --include=Dockerfile* --exclude-dir={node_modules,.git} . 2>/dev/null | head -10
+grep -rE "livenessProbe|readinessProbe" --include="*.yaml" --include="*.yml" --exclude-dir={node_modules,.git} . 2>/dev/null | head -10
 ```
 
 ## Output Format

@@ -51,8 +51,7 @@ if [ -z "$MB" ]; then
 else
   # What changed since the merge-base (includes uncommitted work)
   git diff "$MB" --stat
-  git diff "$MB" --name-only
-  git diff "$MB" --numstat   # per-file added/deleted counts — feeds the standards axis's mechanical file-size check
+  git diff "$MB" --numstat   # per-file added/deleted counts — lists changed files and feeds the standards axis's mechanical file-size check
   git diff "$MB"
 fi
 ```

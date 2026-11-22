@@ -24,10 +24,15 @@ The goal and the when-this-applies rule are stated once, in workflow.md §Phase 
 
 ### 0.5.1 — Enumerate glossaries
 
-Use the flowctl helper as the single source of truth:
+Reuse the cached glossary JSON that workflow.md §Phase 0.5 already captured (only re-run `flowctl glossary list --json` if the cache file is missing because the gate failed open on a probe error):
 
 ```bash
-GLOSSARY_JSON="$("$FLOWCTL" glossary list --json 2>/dev/null || echo '{"groups":[],"file_count":0,"total_terms":0}')"
+GLOSSARY_CACHE="${TMPDIR:-/tmp}/flow-audit-glossary-<suffix>.json"   # same literal path as workflow.md Phase 0.5
+if [ -s "$GLOSSARY_CACHE" ]; then
+  GLOSSARY_JSON="$(cat "$GLOSSARY_CACHE")"
+else
+  GLOSSARY_JSON="$("$FLOWCTL" glossary list --json 2>/dev/null || echo '{"groups":[],"file_count":0,"total_terms":0}')"
+fi
 ```
 
 JSON shape:

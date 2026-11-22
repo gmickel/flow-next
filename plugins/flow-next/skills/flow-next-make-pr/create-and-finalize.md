@@ -27,7 +27,8 @@ After an exhausted create retry, wait 30 seconds and re-run /flow-next:make-pr (
 ## Finalize
 Only under `--memory`: read [memory-entry.md](memory-entry.md) after a successful creation or update.
 
-Run `"$FLOWCTL" sync active --json`. Only when it reads `active: false`: skip the tracker step;
+Reuse `TRK_ACTIVE` from `make-pr-create.sh` when already set in this shell; otherwise run
+`"$FLOWCTL" sync active --json`. Only when it reads `false` (`active: false`): skip the tracker step;
 the slot reads `n/a (bridge inactive)`. Otherwise, including an error: read
 [tracker-finalize.md](tracker-finalize.md) and run it.
 

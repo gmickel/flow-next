@@ -10,11 +10,8 @@ if [[ -z "$SPEC_ID" ]]; then
   CURRENT_BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
   if [[ -n "$CURRENT_BRANCH" ]]; then
     SPEC_ID=$(
-      { find "$REPO_ROOT/.flow/specs" -maxdepth 1 -name '*.json' 2>/dev/null
-        find "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' 2>/dev/null
-      } \
-      | xargs -I{} jq -r --arg b "$CURRENT_BRANCH" \
-          'select(.branch_name == $b) | .id' {} 2>/dev/null \
+      find "$REPO_ROOT/.flow/specs" "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' \
+        -exec jq -r --arg b "$CURRENT_BRANCH" 'select(.branch_name == $b) | .id' {} \; 2>/dev/null \
       | head -1)
   fi
 fi

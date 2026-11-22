@@ -7,10 +7,10 @@ Only `land.mergeVerdictCommand` and `land.patienceMinutes` are used (defaults:
 unset and 10). Existing configs may contain other `land.*` keys: print one
 notice naming all ignored keys and continue; do not rewrite the config.
 
-The origin remote names the forge (flowctl's one forge rule); anything unread stays on GitHub:
+The origin remote names the forge (flowctl's local `--forge-only` rule; no PR list or spec scan); anything unread stays on GitHub:
 
 ```bash
-FORGE="$("$FLOWCTL" pilot snapshot --json 2>/dev/null | jq -r '.forge // empty' 2>/dev/null | tr -d '\r')" || true
+FORGE="$("$FLOWCTL" pilot snapshot --forge-only --json 2>/dev/null | jq -r '.forge // empty' 2>/dev/null | tr -d '\r')" || true
 FORGE="${FORGE:-github}"
 ```
 

@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-346-efficiency-audit-2026-11-wave-2-cli",
+  "created_at": "2026-11-21T22:27:31.696490Z",
+  "depends_on_epics": [],
+  "id": "fn-346-efficiency-audit-2026-11-wave-2-cli",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-346-efficiency-audit-2026-11-wave-2-cli.md",
+  "status": "open",
+  "title": "Efficiency audit 2026-11 wave 2: CLI plumbing and multi-turn orchestration speedups",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-11-21T22:27:31.699564Z"
+}

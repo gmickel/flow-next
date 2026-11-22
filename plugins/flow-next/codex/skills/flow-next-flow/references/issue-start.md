@@ -27,9 +27,6 @@ run). Then, before any write:
   is the consent read (the exact ready lane) and supplies
   the locator, `{"durable": <id>, "display": <identifier>}`. A truncated listing never counts as
   absent.
-- `"$FLOWCTL" tracker wire read --locator "$LOCATOR" --json` and
-  `"$FLOWCTL" tracker wire comment-list --locator "$LOCATOR" --json` give the body and comments;
-  a comment listing with `truncated: true` counts as a failed read.
 
 Any of these false or failing stops `NEEDS_HUMAN` with the reason or transport error, before any
 write; an issue not in the ready lane is `issue <key> is not in <readyState>`.
@@ -62,6 +59,13 @@ command failing (a spec JSON it cannot read), stops `NEEDS_HUMAN`, never a captu
   before any work hop. Any other linked spec runs exactly as a person left it.
 
 ## 3. Read the source
+
+Only reached when step 2 found no linked spec. Fetch the full body and comments now:
+
+- `"$FLOWCTL" tracker wire read --locator "$LOCATOR" --json` and
+  `"$FLOWCTL" tracker wire comment-list --locator "$LOCATOR" --json` give the body and comments;
+  a failed read or a comment listing with `truncated: true` stops `NEEDS_HUMAN` with the reason or
+  transport error, before any write.
 
 The source is the issue body and its comments. When a comment carries a `flow-next:question`
 marker from an earlier run, the person moving the issue back into the ready state, with a comment
@@ -108,8 +112,9 @@ After a successful capture:
   `git push -u origin <branch_name>`. A failed push stops `NEEDS_HUMAN`; no work is dispatched. The
   spec then reaches the default branch with the pull request that builds it.
 
-Set `PILOT_SPEC` and rerun auto.md's snapshot fence for it, then continue with auto.md's phases.
-Under `--tick` the capture is the hop: end `ADVANCED`, `stage=capture`.
+Under `--tick` (`AUTO_TICK=1`), the capture is the hop: end `ADVANCED`, `stage=capture` without
+rerunning the snapshot. Otherwise set `PILOT_SPEC`, rerun auto.md's snapshot fence for it, and
+continue with auto.md's phases.
 
 **Design review before work.** The captured spec gets a design review against the issue before any
 work hop: it counts as an explicit request to review the spec's design (auto.md Arguments), so
@@ -141,7 +146,7 @@ move it back to <readyState>." For a non-build issue, say which route fits and h
 ```
 
 The slug names the topic and ends in the first 8 hex digits of the issue body's SHA-256
-(`jq -j '.data.body' <read> | sha256sum | cut -c1-8` on step 1's read): the same question on an
+(`jq -j '.data.body' <read> | sha256sum | cut -c1-8` on step 3's read): the same question on an
 unchanged issue body dedupes, and an answer made by editing the issue body posts a new round.
 `--reply-settles` makes a comment after the latest matching question settle that round, as step 3
 reads it: a follow-up on the same topic after a plain reply posts a new round, and a rerun of a

@@ -20,7 +20,7 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 ## Setup
 
 ```bash
-$FLOWCTL detect --json | jq -e '.exists' >/dev/null && echo "OK: .flow/ exists" || echo "ERROR: run $FLOWCTL init"
+[ -d "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.flow" ] && echo "OK: .flow/ exists" || echo "ERROR: run $FLOWCTL init"
 command -v jq >/dev/null 2>&1 && echo "OK: jq installed" || echo "ERROR: brew install jq"
 ```
 
@@ -44,7 +44,7 @@ SPECS_LIST="$($FLOWCTL specs --json)"
     }'
   done
 } | jq -s '.' > "$SPECS_FILE"
-cat "$SPECS_FILE"
+jq -r --arg f "$SPECS_FILE" '"Gathered \(length) specs (\([.[] | select(.status != "done")] | length) open) -> \($f)"' "$SPECS_FILE"
 ```
 
 ### Done when

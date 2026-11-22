@@ -50,9 +50,7 @@ A checkout that does not build or start as-is: **fix that first or report it pre
 
 **No usable driver on this host** (drive skill degraded to documented-limitation / no rung that can act): end `REFUSED` naming the missing driver. Same refusal family as no surface.
 
-Read [references/doctor-and-proof.md](references/doctor-and-proof.md) before the first drive. Doctor is the one read-only worth-driving check (right build/version, port owned by this run, auth valid). Run it **before the first drive, on each fresh session, and again after any failed drive.**
-
-Never drive an instance this run did not start. An orphaned port from a crashed prior run: Doctor reports it and the run ends `BLOCKED` with the reclaim instruction for the human. Two concurrent runs isolate by disposable profile/port; where the app cannot run twice, the owned-port check fails and the second run ends `BLOCKED`.
+Read [references/doctor-and-proof.md](references/doctor-and-proof.md) before the first drive; it owns Doctor timing, process ownership (never drive a foreign instance or kill by process name), orphaned-port / concurrent-isolation `BLOCKED` stops, wedged-UI recovery, proof standards, and cleanup (never delete evidence).
 
 ### Done when
 
@@ -80,22 +78,11 @@ Per candidate record: slug, `Surface`, one-line user-visible behavior, likely en
 
 ## Phase 4: Prove each route
 
-**Goal:** every seeded route is proven by one live drive before it lands. Nothing enters the map that was not driven once. A cleanup that eats the proof fails the step.
+**Goal:** every seeded route is proven by one live drive before it lands. Nothing enters the map that was not driven once.
 
-For each candidate, for each user entry point:
+Follow [references/doctor-and-proof.md](references/doctor-and-proof.md) for Doctor, proof, wedged-UI recovery, and unreachable-route reporting. Drive UI surfaces via the flow-next-drive pointer above (`observe → snapshot fresh refs → act → verify → capture`) and `cli` surfaces by running the documented command in the run-owned session and capturing stdout/stderr/exit.
 
-1. **Doctor** - before the first drive this session; again after any failed drive; again on a fresh session.
-2. **Drive**: UI surfaces via the flow-next-drive read-and-drive contract (pointer above; universal flow: observe → snapshot fresh refs → act → verify → capture); `cli` surfaces by running the documented command directly in the run-owned session and capturing stdout/stderr/exit.
-3. **Proof** follows [references/doctor-and-proof.md](references/doctor-and-proof.md): capture the user action **and** the resulting state, not just the final screen; verify side effects beside what is visible; exercise the real user path, never a test-only endpoint.
-4. Only a proven route is eligible to land.
-
-Failed route: name it, do not land it, continue. Partial seed lands proven features and reports failures by name - never all-or-nothing discard, never an undriven entry.
-
-Unreachable: report the attempted route and the unmet precondition. Never record it as verified-via-another-path. An unstated prerequisite is itself a finding, not a pass.
-
-Wedged UI on a healthy process (Doctor cannot see it): reset to a known state or relaunch rather than hoping.
-
-Never drive an instance this run did not start.
+Only a proven route is eligible to land. On a failed or unreachable route: name it (with attempted route and unmet precondition), do not land it, and continue. Partial seed lands proven features and reports failures by name - never all-or-nothing discard, never an undriven entry.
 
 ### Done when
 
@@ -154,15 +141,3 @@ Seed outcomes this file emits:
 
 - Instances and scratch this run started are gone; evidence remains at its named paths.
 - The last line of the run is one `FEATURES_VERDICT=` line matching the grammar above.
-
----
-
-## Refusal paths (summary)
-
-| Condition | Verdict | Reason names |
-|-----------|---------|--------------|
-| No drivable user surface | `REFUSED` | that the repo has no user-facing surface to drive |
-| No usable driver on this host | `REFUSED` | the missing driver |
-| Checkout does not build or start as-is | `REFUSED` | the precise breakage (or it was fixed first, and seed continued) |
-| Autonomy marker (SKILL.md fence) | `REFUSED` | autonomy marker present |
-| Orphaned port / concurrent shared instance | `BLOCKED` | the port/process this run did not start; reclaim is the human's |

@@ -42,9 +42,9 @@ all else verbatim (spaces/quotes/globs). Set/export `AUTONOMOUS=1` if found or
 `FLOW_AUTONOMOUS=1`; otherwise set/export `AUTONOMOUS=0`.
 
 Continue with `WORK_ARGS`; carry the exported marker into later shell fragments.
-If `AUTONOMOUS=1`: read [references/autonomous-defaults.md](references/autonomous-defaults.md)
-before any question, and:
+If `AUTONOMOUS=1`:
 
+- **Never hang on a question.** Setup questions (branch + review) are suppressed; a genuinely unanswerable ambiguity stops cleanly with a one-line `NEEDS_HUMAN: <reason>` report instead of asking.
 - **Branch defaults deterministically to `--branch=new`** when no explicit branch option is present — under autonomy "the user's answer" never exists, and defaulting to the current branch could commit straight to main. A chained spec (`flowctl spec chain` names a parent) forks from the parent's remote tip instead of main (phases.md Phase 2). **Name the new branch exactly the spec's `branch_name` field** (`$FLOWCTL show <spec-id> --json | jq -r '.branch_name'`) — the branch matrix of `flow --auto`, its all-done PR probe, and make-pr's branch-match spec detection all key on that name; an ad-hoc name breaks continuity across hops and invocations.
 
 ## Input

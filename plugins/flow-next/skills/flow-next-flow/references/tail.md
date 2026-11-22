@@ -27,7 +27,10 @@ tracker restrictions; never widen the target.
 
 1. Resolve the exact repository and PR from the spec's `branch_name`, make-pr
    output and fresh `gh pr list --head <branch> --state all` observations.
-   Confirm with `gh pr view <PR> --json url,number,state,headRefName,baseRefName,headRefOid,mergeCommit`.
+   When binding right after make-pr's verify fence (which already fetched
+   `url,state,number,headRefName,baseRefName,headRefOid,mergeCommit`), reuse
+   that fresh row instead of running `gh pr list` and `gh pr view` again;
+   otherwise confirm with `gh pr view <PR> --json url,number,state,headRefName,baseRefName,headRefOid,mergeCommit`.
    Multiple plausible targets, failed/truncated probes or conflicting identity
    stop `NEEDS_HUMAN`. Bind the PR once; a missing or closed-unmerged target
    stops and is never replaced or reopened. A goal run binds each child's PR on its

@@ -17,7 +17,7 @@ was cut and how many issues the table covers, even when that is none: the cap co
 issues too. When `issues` is empty and the list was not cut, say there is nothing to triage and
 stop.
 
-Read the open specs (`"$FLOWCTL" specs --json`, then `"$FLOWCTL" cat <spec-id>` where a title
+Read the open specs (`"$FLOWCTL" specs --json | jq -c '[.specs[]? | select(.status == "open") | {id, title}]'`, then `"$FLOWCTL" cat <spec-id>` where a title
 alone does not settle it) so each issue can be matched. Which spec an issue belongs to is your
 judgment from titles and excerpts; flowctl never decides it.
 

@@ -1308,6 +1308,7 @@ _SUBSTANCE_KEYS = {
     "devcontainer", "docs_freshness", "large_files", "ci_gate", "secrets_gate",
     "destructive_scan", "api_contract", "config_presence", "runtime_currency",
     "encoding_sample", "atomic_pairs", "tool_managed", "hooks",
+    "features_status", "glossary_terms",
 }
 
 

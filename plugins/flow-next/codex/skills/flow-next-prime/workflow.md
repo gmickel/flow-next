@@ -381,7 +381,7 @@ Emit exactly one QA-readiness line:
 - **anything less** (tier < 3 or any DR-core member failing) -> "QA stage would fail here: <name the missing DR-core items>", so the team fixes the prerequisites before switching the stage on.
 - **shape/tier-capped repo** (library / plugin / prose, or a tier 1-2 ceiling stack per [classification.md](classification.md)) -> "QA stage not applicable to this shape" - never a gap, never a fabricated pass.
 
-Beside it, always emit one **feature-map line**, whatever the QA-readiness outcome or shape, from `.recommendation` of `$FLOWCTL features status --json` (read-only; a repo with no `.flow/` reads as `seed`; in a home-base workspace, where sibling repos hold the product code, add `--repo <path>` for each one the project instructions name): `seed` -> "Feature map: run `/flow-next:features` to seed `.flow/features/` so QA, drive and bug intake reuse how a user reaches each feature"; `maintain` -> "Feature map: due a maintain pass (<reasons>) - run `/flow-next:features`"; `none` -> "Feature map: current". A repo with no drivable surface still gets the line; the seed pass refuses there on its own.
+Beside it, always emit one **feature-map line**, whatever the QA-readiness outcome or shape, from `.substance.features_status.recommendation` in the Phase 0.5 `prime classify` payload (in a home-base workspace where sibling repos hold the product code, run `$FLOWCTL features status --json` with `--repo <path>` for each sibling instead): `seed` -> "Feature map: run `/flow-next:features` to seed `.flow/features/` so QA, drive and bug intake reuse how a user reaches each feature"; `maintain` -> "Feature map: due a maintain pass (<reasons>) - run `/flow-next:features`"; `none` -> "Feature map: current". A repo with no drivable surface still gets the line; the seed pass refuses there on its own.
 
 ### Feedback latency (FH8, report-only) + gh-CLI host line (FH9, informational)
 
@@ -418,14 +418,7 @@ FH9 is informational (host env) - it feeds the report header (Phase 4) and is ex
 
 ### Glossary signal (DC8 — deterministic, no scout)
 
-One bash call decides DC8 — run it during synthesis (no scout covers it):
-
-```bash
-FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
-[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
-[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-GLOSSARY_TERMS=$("$FLOWCTL" glossary list --json 2>/dev/null | jq -r '.total_terms // 0')
-```
+Read `GLOSSARY_TERMS` from `.substance.glossary_terms.total_terms // 0` in the Phase 0.5 `prime classify` payload (already collected; no separate `glossary list` subprocess needed).
 
 Gate on `total_terms == 0`, NEVER on `[[ -f GLOSSARY.md ]]` — `flowctl glossary remove` leaves a `# Glossary` H1 husk after the last term is removed (the file is project state, never deleted), so a presence check false-passes on an empty husk. Same invariant as refine's doc-aware autodetect.
 
