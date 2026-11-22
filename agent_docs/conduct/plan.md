@@ -2,6 +2,7 @@
 
 A correct run turns a rough idea into a spec with right-sized tasks in `.flow/`, grounded in repo research — and writes no code.
 
+- [ ] Plan runs only on a person's explicit ask for a plan or a task breakdown (direct or relayed in a brief), `/flow-next:plan`, or a flow route. A session that reached plan from a request to build, implement, deliver or run a spec, whoever sent it, has broken this.
 - [ ] Every artifact is created or updated through `flowctl` into `.flow/`. A markdown TODO list, a TodoWrite call, or a plan file outside `.flow/` has broken this.
 - [ ] The spec and task specs describe what, not how: signatures, repo patterns carried with `file:line` refs, and non-obvious gotchas only. The `file:line` refs live in the task specs; a spec body stating file paths or line numbers instead of contracts, or a copy-paste-ready function body in a task spec, has broken this.
 - [ ] Step 1 launches the depth-appropriate scout set in one parallel call before any spec content is written; no scout in that set is skipped or run serially.

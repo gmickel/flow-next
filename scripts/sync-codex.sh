@@ -507,7 +507,7 @@ for nf in \
     -e 's|use `/flow-next:plan-review fn-N`|use `$flow-next-plan-review fn-N`|g' \
     -e 's|suggest `/flow-next:plan fn-N`|suggest `$flow-next-plan fn-N`|g' \
     -e 's|`/flow-next:plan-review`|`$flow-next-plan-review`|g' \
-    -e 's|spec has no tasks - choose /flow-next:work <spec-id> --no-plan or /flow-next:plan <spec-id>|spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>|g' \
+    -e 's|spec has no tasks and no recorded route - build it directly with /flow-next:work <spec-id> --no-plan (or /flow-next:flow <spec-id>, which records the route); /flow-next:plan is only for a person who asks for a task breakdown|spec has no tasks and no recorded route - build it directly with $flow-next-work <spec-id> --no-plan (or $flow-next-flow <spec-id>, which records the route); $flow-next-plan is only for a person who asks for a task breakdown|g' \
     -e 's|stop; run /flow-next:plan to break the spec|stop; run $flow-next-plan to break the spec|g' \
     -e 's|pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`|pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`|g' \
     -e 's|with a pointer to `/flow-next:plan` or|with a pointer to `$flow-next-plan` or|g' \
@@ -1688,7 +1688,7 @@ generate_openai_yaml() {
 
 # Workflow skills (blue, implicit - surfaced in the model catalog so prose
 # like "plan this feature" / "pilot this to completion" resolves the skill)
-generate_openai_yaml "flow-next-plan"      "Flow Plan"      "Create structured build plans from feature requests" "#3B82F6" true "Plan out this feature: "
+generate_openai_yaml "flow-next-plan"      "Flow Plan"      "Task breakdown for a spec, only when a person asks for a plan or flow-next-flow routes here" "#3B82F6" true "Break this spec into tasks: "
 generate_openai_yaml "flow-next-work"      "Flow Work"      "Execute planned tasks with worker subagents"          "#3B82F6" true "Work on: "
 generate_openai_yaml "flow-next-refine"    "Flow Refine"    "Refine a spec or task: deep Q&A, or a read-only external-docs research pass" "#3B82F6" true
 generate_openai_yaml "flow-next-setup"     "Flow Setup"     "Initialize flow-next in current project"              "#3B82F6" true
@@ -1762,7 +1762,7 @@ python3 - "$CODEX_DIR" <<'PYEOF'
 import sys, pathlib
 codex_dir = pathlib.Path(sys.argv[1])
 DIET = {
-    "flow-next-plan": "Break a flow-next spec into reviewed tasks. Run only when asked for a plan or task breakdown, or routed by flow-next-flow; other build requests go to flow-next-flow.",
+    "flow-next-plan": "Task breakdown for a spec, only when a person explicitly asks for a plan or task breakdown, or flow-next-flow routes here. Never for a request to build, implement or deliver a spec, whoever asks.",
     "flow-next-work": "Execute a flow-next spec or task with workers, gates and commits. Run when the work command is typed or flow-next-flow routes here; plain requests to implement fn-N go to flow-next-flow.",
     "flow-next-land": "Resolve feedback and CI for one named pull request, then merge when authorized and ready. Emits LAND_VERDICT. Use when asked to land a pull request.",
     "flow-next-make-pr": "Open a PR with a cognitive-aid body rendered from flow-next spec state via gh, or a GitLab merge request via glab. Use whenever asked to make or open a PR in a flow-next repo.",
@@ -2384,7 +2384,7 @@ flow-next-flow/references/route-matrix.md	| `/flow-next:work <spec-id> --no-plan
 flow-next-flow/references/route-matrix.md	then `/flow-next:make-pr <spec-id>`	then `$flow-next-make-pr <spec-id>`
 flow-next-flow/references/plan-vs-no-plan.md	Recommended next: /flow-next:work <spec-id> --no-plan	Recommended next: $flow-next-work <spec-id> --no-plan
 flow-next-flow/references/plan-vs-no-plan.md	Recommended next: /flow-next:plan <spec-id>	Recommended next: $flow-next-plan <spec-id>
-flow-next-work/references/no-plan-ask.md	spec has no tasks - choose /flow-next:work <spec-id> --no-plan or /flow-next:plan <spec-id>	spec has no tasks - choose $flow-next-work <spec-id> --no-plan or $flow-next-plan <spec-id>
+flow-next-work/references/no-plan-ask.md	spec has no tasks and no recorded route - build it directly with /flow-next:work <spec-id> --no-plan (or /flow-next:flow <spec-id>, which records the route); /flow-next:plan is only for a person who asks for a task breakdown	spec has no tasks and no recorded route - build it directly with $flow-next-work <spec-id> --no-plan (or $flow-next-flow <spec-id>, which records the route); $flow-next-plan is only for a person who asks for a task breakdown
 flow-next-work/references/no-plan-ask.md	stop; run /flow-next:plan to break the spec	stop; run $flow-next-plan to break the spec
 flow-next-work/references/no-plan-ask.md	pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`	pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`
 flow-next-work/references/no-plan-route.md	with a pointer to `/flow-next:plan` or	with a pointer to `$flow-next-plan` or

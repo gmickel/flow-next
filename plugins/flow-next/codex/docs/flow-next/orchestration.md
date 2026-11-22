@@ -575,9 +575,9 @@ Fields ride with the item, so `flow --auto` and land honour them at 3am too.
 **Rung 5 - a standing policy paragraph.** In the same instruction file:
 
 ```text
-Work the ready specs. Decide per spec, from its Boundaries and the size of
-its Touches, whether to plan first or work directly; a spec with a named
-open product decision goes to refine instead. Anything touching auth or the
+Work the ready specs directly; plan first only where I ask for a task
+breakdown, whatever the spec's size; a spec with a named open product
+decision goes to refine instead. Anything touching auth or the
 migration you implement yourself on the session model; plain CRUD goes out
 to a codex exec bridge. Reviews come from codex either way; if a task's
 review comes back NEEDS_WORK twice, stop bridging it and implement it
