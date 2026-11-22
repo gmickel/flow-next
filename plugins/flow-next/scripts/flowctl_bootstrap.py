@@ -75,8 +75,8 @@ def _repo_root() -> Path:
         return Path.cwd()
 
 
-def _usage_fast_path(source: Path, filename: str = "usage.md") -> int:
-    bundled = source.parent.parent / "templates" / filename
+def _usage_fast_path(source: Path) -> int:
+    bundled = source.parent.parent / "templates" / "usage.md"
     try:
         if bundled.is_file():
             sys.stdout.write(bundled.read_text(encoding="utf-8"))
@@ -84,7 +84,7 @@ def _usage_fast_path(source: Path, filename: str = "usage.md") -> int:
     except OSError:
         pass
 
-    local = _repo_root() / ".flow" / filename
+    local = _repo_root() / ".flow" / "usage.md"
     for candidate in (local,):
         try:
             if candidate.is_file():
@@ -92,14 +92,7 @@ def _usage_fast_path(source: Path, filename: str = "usage.md") -> int:
                 return 0
         except OSError:
             continue
-    if filename == "usage.md":
-        print(f"Error: {USAGE_ERROR}", file=sys.stderr)
-    else:
-        print(
-            f"Error: No usage guide found (searched the plugin's templates/{filename}, "
-            f"then .flow/{filename}). Reinstall or update the flow-next plugin.",
-            file=sys.stderr,
-        )
+    print(f"Error: {USAGE_ERROR}", file=sys.stderr)
     return 1
 
 
@@ -187,9 +180,7 @@ def main() -> int:
 
     source = Path(__file__).resolve().with_name(SOURCE_NAME)
     if sys.argv[1:] == ["usage"]:
-        return _usage_fast_path(source, "usage.md")
-    if sys.argv[1:] == ["usage", "--orchestration"]:
-        return _usage_fast_path(source, "usage-orchestration.md")
+        return _usage_fast_path(source)
     if sys.argv[1:] == ["--help"] and _root_help_fast_path(source):
         return 0
 

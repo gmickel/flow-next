@@ -10,8 +10,9 @@ controlled cwd per case:
 3. Neither — same isolated copy; cwd has ``.flow/`` but no ``usage.md`` →
    exit 1 and the canonical error message.
 4. ``--orchestration`` — the bridge and model-steering recipes, served the
-   same way from ``templates/usage-orchestration.md`` by flowctl.py and the
-   bootstrap fast path; plain ``usage`` keeps a pointer heading to them.
+   same way from ``templates/usage-orchestration.md`` by flowctl.py (the
+   launchers send only bare ``usage`` to the bootstrap fast path); plain
+   ``usage`` keeps a pointer heading to them on both paths.
 """
 
 from __future__ import annotations
@@ -129,10 +130,9 @@ class TestCmdUsageOrchestration(unittest.TestCase):
         self.assertIn("## Orchestration & model steering", expected)
         self.assertIn("codex exec", expected)
         with tempfile.TemporaryDirectory() as tmp:
-            for entry in (FLOWCTL_PY, BOOTSTRAP_PY):
-                result = _run_usage(entry, Path(tmp), "--orchestration")
-                self.assertEqual(result.returncode, 0, msg=result.stderr)
-                self.assertEqual(result.stdout, expected)
+            result = _run_usage(FLOWCTL_PY, Path(tmp), "--orchestration")
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertEqual(result.stdout, expected)
 
     def test_help_documents_the_flag(self) -> None:
         result = subprocess.run(
@@ -150,14 +150,12 @@ class TestCmdUsageOrchestration(unittest.TestCase):
             bindir = tmp / "fake" / "bin"
             bindir.mkdir(parents=True)
             shutil.copy2(FLOWCTL_PY, bindir / "flowctl.py")
-            shutil.copy2(BOOTSTRAP_PY, bindir / "flowctl_bootstrap.py")
             repo = tmp / "repo"
             (repo / ".flow").mkdir(parents=True)
-            for entry in (bindir / "flowctl.py", bindir / "flowctl_bootstrap.py"):
-                result = _run_usage(entry, repo, "--orchestration")
-                self.assertEqual(result.returncode, 1, msg=result.stdout)
-                self.assertIn(NO_GUIDE_MSG, result.stderr)
-                self.assertIn("usage-orchestration.md", result.stderr)
+            result = _run_usage(bindir / "flowctl.py", repo, "--orchestration")
+        self.assertEqual(result.returncode, 1, msg=result.stdout)
+        self.assertIn(NO_GUIDE_MSG, result.stderr)
+        self.assertIn("usage-orchestration.md", result.stderr)
 
 
 if __name__ == "__main__":

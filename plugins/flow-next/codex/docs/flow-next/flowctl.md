@@ -216,7 +216,7 @@ flowctl usage --orchestration
 
 Resolution order: the plugin's bundled `templates/usage.md` (`templates/usage-orchestration.md` with `--orchestration`; always current with the installed plugin - this is where the guide comes from), then, as inert legacy grace, the same file name under a repo-local `.flow/` left over from the retired copy layout. Exits 1 with a pointer to reinstalling/updating the plugin when neither exists.
 
-The Unix and Windows launchers route both exact commands through the small `flowctl_bootstrap.py` fast path, so printing static guidance does not load the full CLI. Exact root `--help` similarly reads tracked `flowctl-help.txt`, with parity tests pinning it to argparse output. The bytecode-cache proof was rejected: a runtime-written ignored pyc can validate a source hash without proving its executable payload came from that source. Every non-static command therefore compiles tracked `flowctl.py` in memory, preserves it as the logical `__file__`, and never reads or writes executable cache state.
+The Unix and Windows launchers route exact `flowctl usage` (no other arguments; `--orchestration` runs through the full CLI) through the small `flowctl_bootstrap.py` fast path, so printing static guidance does not load the full CLI. Exact root `--help` similarly reads tracked `flowctl-help.txt`, with parity tests pinning it to argparse output. The bytecode-cache proof was rejected: a runtime-written ignored pyc can validate a source hash without proving its executable payload came from that source. Every non-static command therefore compiles tracked `flowctl.py` in memory, preserves it as the logical `__file__`, and never reads or writes executable cache state.
 
 ### detect
 
