@@ -66,8 +66,8 @@ flowchart LR
     Capture -->|ready cohesive spec| DirectWork[/flow-next:work --no-plan/]
     DirectWork --> ImplReview
     Interview --> PlanReview[/flow-next:plan-review/]
-    PlanReview -->|coordination needs tasks| Plan[/flow-next:plan/]
-    PlanReview -->|cohesive spec| DirectWork
+    PlanReview -->|a person asks for a task breakdown| Plan[/flow-next:plan/]
+    PlanReview -->|default| DirectWork
     Plan --> Work[/flow-next:work/]
     Work --> ImplReview[/flow-next:impl-review/]
     ImplReview -->|SHIP| SpecCompletionReview[/flow-next:spec-completion-review/]
@@ -140,7 +140,7 @@ Example journeys (research-led, prototype-led reversal with supersession, multi-
 | Role | Triggers | Reviews | Notes |
 |------|----------|---------|-------|
 | **Product Owner / PM** | `/flow-next:chart` (optional), `/flow-next:capture`, `/flow-next:refine --biz` | Chart Outcome/frontier/cost; `.flow/specs/<id>.md` after capture; `/flow-next:plan-review` output | The PO may chart an oversized unclear idea, or draft the spec from a `prospect`-promoted candidate / conversation / chart briefing via `capture`. |
-| **Tech lead / Senior eng** | `/flow-next:refine --tech` (optionally `--strategy --docs` for doc-aware mode), `/flow-next:plan` | Tasks under `.flow/tasks/`; review-backend choice (`flowctl review-backend`) | Owns the technical layer of the spec, the plan, and which review backend gates `/work`. |
+| **Tech lead / Senior eng** | `/flow-next:refine --tech` (optionally `--strategy --docs` for doc-aware mode), `/flow-next:plan` when they want a task breakdown | Tasks under `.flow/tasks/`; review-backend choice (`flowctl review-backend`) | Owns the technical layer of the spec, the plan, and which review backend gates `/work`. |
 | **Implementing eng (human or agent)** | `/flow-next:work`, `/flow-next:impl-review` | Per-task `done_summary` + evidence | Re-anchors before each task (re-reads spec + git state). Worker subagent gets fresh context per task. |
 | **Reviewer** | `/flow-next:resolve-pr` (after PR review threads land) | PR body produced by `/flow-next:make-pr`, the diff itself | Reads the cognitive-aid body first: Review focus and Needs you, then the Reading order's start files. |
 | **Maintainer / on-call** | `/flow-next:audit`, `/flow-next:memory-migrate` | `.flow/memory/` entries | Periodic review of stale memory; Keep / Update / Consolidate / Replace / Delete / Harden per entry. |
@@ -326,11 +326,11 @@ Use `/flow-next:plan-review <spec-id>` to run a cross-model review *before* open
 
 ### Parallel work from one spec
 
-When the spec decomposes into independent tasks, multiple agents (or humans + agents) can implement them in parallel:
+When you want a spec split into independent tasks, ask for a plan; multiple agents (or humans + agents) can then implement the tasks in parallel:
 
 | Pattern | How |
 |---------|-----|
-| Decompose at spec level | `/flow-next:plan` writes per-task `requires: [task-ids]` frontmatter and reports the resulting execution waves. Independent tasks are ready immediately; dependent tasks wait. |
+| Decompose at spec level | Asked for a task breakdown, `/flow-next:plan` writes per-task `requires: [task-ids]` frontmatter and reports the resulting execution waves. Independent tasks are ready immediately; dependent tasks wait. |
 | Module boundaries in spec | Spec sections name the module: "Auth API" and "Auth UI" become separate task clusters with the API contract between them. Each cluster runs in its own worker subagent (fresh context) without coordination overhead. |
 | Cross-task evidence | Per-task `done_summary` is the breadcrumb the next task reads to re-anchor. No standup needed. |
 | Host-selected isolation | `/flow-next:work` evaluates dependencies, declared files, shared resources, and host capacity. Concurrent workers use isolated mutable workspaces plus a safe integration arrangement; the host serializes when those conditions are not met. |
@@ -528,8 +528,8 @@ Don't try to roll out all 26 commands at once. Layer them in.
 Turn on three commands. Use them on one spec.
 
 - `/flow-next:capture` - write the spec from a discussion the team had this week.
-- `/flow-next:plan` - break the spec into tasks.
-- `/flow-next:work` - implement.
+- `/flow-next:work <spec-id> --no-plan` - implement the spec directly.
+- `/flow-next:plan` - only when you want the spec broken into tasks first.
 
 Skip review for the first spec. Skip `flow --auto`. The goal is to feel the lifecycle on a real piece of work.
 
@@ -538,7 +538,7 @@ Skip review for the first spec. Skip `flow --auto`. The goal is to feel the life
 Add cross-model review and the PR-as-cognitive-aid surface.
 
 - Configure `flowctl review-backend` at the team level (`codex` or `copilot` is the lowest-friction starting point).
-- Run `/flow-next:plan-review` after every `/plan`. Surface gaps before they reach `/work`.
+- Run `/flow-next:plan-review` on each spec before `/work`, and after `/plan` when you asked for one. Surface gaps before they reach `/work`.
 - Run `/flow-next:impl-review` after every `/work` task. A `NEEDS_WORK` verdict gets one fix pass and one re-review of the fixes; say "review until SHIP" when you want it to loop.
 - Use `/flow-next:make-pr` for every PR. The team gets used to reading the cognitive-aid body before the diff.
 

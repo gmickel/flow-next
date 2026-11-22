@@ -38637,7 +38637,9 @@ def cmd_next(args: argparse.Namespace) -> None:
         }
 
         if not tasks:
-            direct = epic_data.get("no_plan") is True
+            # A ready spec with no recorded route goes direct, as flow's route does:
+            # plan runs only on a person's ask, which code never reads.
+            direct = epic_data.get("no_plan") is True or epic_data.get("ready") is True
             review_needed = (
                 args.require_plan_review
                 and epic_data.get("plan_review_status") != "ship"

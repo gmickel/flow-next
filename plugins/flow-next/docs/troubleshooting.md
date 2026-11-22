@@ -27,7 +27,7 @@ Common recovery patterns for stuck tasks, broken state, and review-backend confl
 
 ## Updated the plugin: do I re-run setup?
 
-**No.** Setup copies nothing into your repo, so a plugin update (`/plugin` update, `droid plugin update`, or `git pull` + re-install on Codex/Cursor) is the whole update: every skill resolves `flowctl` from the plugin install itself, and the agent guide comes from `flowctl usage`. Re-run `/flow-next:setup` only when setup tells you the docs-snippet schema bumped, or when you want to change configuration or re-seed the user-owned files. It stays idempotent and non-destructive (your specs/tasks/memory/config are untouched). See [platforms.md → What setup does](platforms.md#what-setup-does).
+**Usually not.** Setup copies nothing into your repo, so a plugin update (`/plugin` update, `droid plugin update`, or `git pull` + re-install on Codex/Cursor) is the whole update: every skill resolves `flowctl` from the plugin install itself, and the agent guide comes from `flowctl usage`. Re-run `/flow-next:setup` when the changelog says the docs snippet in `CLAUDE.md` / `AGENTS.md` changed, so the block in your repo gets the new text; if you edited the block, choose **Overwrite with canonical** when setup asks (only the marker block is replaced), and if you once chose **Keep mine**, setup will not ask again, so copy the changed lines in by hand. Re-run it also when you want to change configuration or re-seed the user-owned files. It stays idempotent and non-destructive (your specs/tasks/memory/config are untouched). See [platforms.md → What setup does](platforms.md#what-setup-does).
 
 ## I have `.flow/bin/` from an old install
 

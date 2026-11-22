@@ -22,7 +22,7 @@ An extra reviewer adds a review pass. A fix adds implementation and re-review. L
 | Who is watching | You are, at the keyboard | Nobody, until morning |
 | What the layers do | Give you a capability on demand | Stand in for the judgment you are not there to apply |
 | Default posture | Run lean; add a layer when the work asks for it | Run gated; the gates are what make the run trustworthy |
-| Typical shape | `spec -> work --no-plan`, with planning when coordination needs tasks | `/flow-next:flow --auto` + `/flow-next:land <PR>`, repeated by a human, a host loop, or a scheduler |
+| Typical shape | `spec -> work --no-plan`, with planning when you ask for a task breakdown | `/flow-next:flow --auto` + `/flow-next:land <PR>`, repeated by a human, a host loop, or a scheduler |
 
 **Neither is the real mode.** They are two answers to one question: *who applies judgment at each handover?* When you are present, you are the reviewer, the tracker, and the QA - a review backend, a bidirectional tracker sync, and a live QA stage are then buying you convenience, not safety, and you should switch each one on only where the convenience is worth its cost. When nobody is present, those same layers stop being convenience: they are the only thing standing between an unattended loop and an unreviewed merge, and running without them is the actual risk.
 

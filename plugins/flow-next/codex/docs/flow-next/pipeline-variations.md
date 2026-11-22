@@ -38,7 +38,7 @@ Flow passes one PR and the current authorization to land per hop. `--auto --tick
 
 When discovery lives in Jira Product Discovery, attended flow can start from the idea itself: give it the idea's key or URL and it routes the idea's text and comments like any other intent, to capture or to chart and then capture. The specs land as child issues under one parent issue that carries a delivery link back to the idea. Set `tracker.perTracker.ideaProjectKeys` to turn it on; see [Idea intake](tracker-sync.md#idea-intake-start-from-a-jira-product-discovery-idea).
 
-The pipeline proper starts where shaped intent exists: at **capture** (turn the intent into a spec) or at **work** for an implementation-ready spec. Use **plan** when decomposition adds coordination value.
+The pipeline proper starts where shaped intent exists: at **capture** (turn the intent into a spec) or at **work** for an implementation-ready spec. Use **plan** when a person asks for a plan or a task breakdown.
 
 ## The variants
 
@@ -84,7 +84,7 @@ Invoke `/flow-next:plan-review <spec-id>` explicitly to review the spec without 
 
 ### No-plan route
 
-**Signal:** acceptance criteria and material decisions are ready, the work is cohesive, and a capable coding agent can own its implementation. This is the recommended route when task decomposition adds no coordination value. The [glossary entry](https://flow-next.dev/reference/glossary/#no-plan-route) names it the **No-plan route**.
+**Signal:** acceptance criteria and material decisions are ready, the work is cohesive, and a capable coding agent can own its implementation. This is the default route; plan runs only when a person asks for a plan or a task breakdown. The [glossary entry](https://flow-next.dev/reference/glossary/#no-plan-route) names it the **No-plan route**.
 
 ```mermaid
 flowchart LR

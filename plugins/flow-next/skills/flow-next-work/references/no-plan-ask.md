@@ -7,7 +7,7 @@
 
 Under ANY autonomy marker (`FLOW_AUTONOMOUS`, `AUTONOMOUS=1` /
 `mode:autonomous` — scan the marker family/namespace, never a fixed two-var list) WITHOUT an explicit no-plan instruction, stop with the typed
-report: `NEEDS_HUMAN: spec has no tasks - choose /flow-next:work <spec-id> --no-plan or /flow-next:plan <spec-id>`.
+report: `NEEDS_HUMAN: spec has no tasks and no recorded route - build it directly with /flow-next:work <spec-id> --no-plan (or /flow-next:flow <spec-id>, which records the route); /flow-next:plan is only for a person who asks for a task breakdown`.
 Never ask, never fall through. An explicit no-plan instruction — the flag or stated
 intent in the dispatching invocation, or the spec's own `no_plan: true` field (an explicit human write, or the route `flow --auto` records before dispatch, which is how its classification routes here) — is the
 only thing that lets an autonomous run take the Direct route; a contradicted signal

@@ -1,6 +1,6 @@
 ---
 name: flow-next-plan
-description: Break a flow-next spec into reviewed tasks. Run only when asked for a plan or task breakdown, or routed by flow-next-flow; other build requests go to flow-next-flow.
+description: Task breakdown for a spec, only on a person's explicit ask (direct or relayed in a brief), $flow-next-plan, or a flow-next-flow route. Never for a request to build, implement, deliver or run a spec.
 user-invocable: false
 ---
 
