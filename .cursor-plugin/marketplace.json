@@ -5,7 +5,7 @@
     "email": "gordon@mickel.tech"
   },
   "metadata": {
-    "description": "Plan-first workflows for Cursor Teams. Ships flow-next: zero-dep, spec-driven SDLC with durable specs, re-anchored workers, and cross-model review."
+    "description": "Spec-driven agentic SDLC for Cursor Teams. Ships flow-next: zero-dep, with durable specs, re-anchored workers, and cross-model review."
   },
   "plugins": [
     {

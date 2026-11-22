@@ -5,7 +5,7 @@
     "url": "https://github.com/gmickel"
   },
   "metadata": {
-    "description": "Plan-first workflows for Claude Code and Factory Droid. Ships flow-next: zero-dep, spec-driven, unattended flow --auto runs.",
+    "description": "Spec-driven agentic SDLC for Claude Code and Factory Droid. Ships flow-next: zero-dep, durable specs, unattended flow --auto runs.",
     "version": "9.19.0"
   },
   "plugins": [
