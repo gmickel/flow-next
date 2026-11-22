@@ -66,8 +66,8 @@ positional arguments:
     tasks               List tasks
     list                List all specs and tasks
     cat                 Print spec markdown
-    usage               Print the bundled usage guide (CLI + orchestration
-                        recipes)
+    usage               Print the bundled usage guide (CLI cheatsheet;
+                        --orchestration for bridge recipes)
     ready               List ready tasks
     next                Select next plan/work unit
     start               Start task

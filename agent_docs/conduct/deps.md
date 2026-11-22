@@ -2,7 +2,7 @@
 
 A correct run reads the spec graph once and reports blocking chains, parallel execution phases, the critical path, and anything unresolvable.
 
-- [ ] The per-spec gather loop runs once into a cached file at a literal composed path, and the later steps read that same literal path instead of re-running the loop.
+- [ ] The graph is gathered with one `flowctl specs --json` call (no per-spec `flowctl show`) into a cached file at a literal composed path, and the later steps read that same literal path instead of gathering again.
 - [ ] The run stays read-only inspection — no `flowctl spec add-dep` / `rm-dep` and no edits to spec files; edge changes are reported as commands for the operator to run.
 - [ ] Every open (non-`done`) spec appears in the report as either READY or BLOCKED with the specific deps that are blocking it.
 - [ ] The Deadlocked / Unresolvable section is rendered whenever the jq result's `.deadlocked` is non-empty, with each spec's unresolved deps and the cause the jq result gives it: `cycle` with its path, `missing`, or `blocked` by another deadlocked spec. A cause guessed from the spec titles or ids, or a report that lists phases while silently dropping an open spec, has broken this.

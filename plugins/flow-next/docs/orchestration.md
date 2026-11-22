@@ -330,7 +330,7 @@ Two rules survive from the packaged path and are not optional:
 - **The bridged child writes code and may commit checkpoints on the branch the host names; the host keeps push, review, `flowctl done`, task state, and any history rewrite.** The child never pushes, never rebases or rewrites history, never decides scope, never issues a review verdict, and never spawns a bridge of its own. On return the host reviews the child's commit range from the base it recorded before dispatch, the same range the in-host worker path gets. Drop the never clauses and a bridge recipe becomes an unbounded second agent; forbidding the local commit buys nothing and forces host-inserted turns on long tasks.
 - **Which tier to bridge to:** on well-specified work a value-tier implementer matches a strong-tier one on correctness at roughly two-thirds the wall clock, so send clear, well-scoped tasks to the value tier and escalate to the strong tier only for genuinely gnarly ones. Spec quality is what makes the trade safe - a vague brief burns the saving on rework.
 
-Full recipes (including the thin-wrapper pattern for unattended loops and the timebox-free brief for long bridged tasks): the usage guide's `## Orchestration & model steering` section - `flowctl usage`. Make it durable by writing the routing into your instruction file: [Durable routing](#durable-routing--a-model-table-in-claudemd).
+Full recipes (including the thin-wrapper pattern for unattended loops and the timebox-free brief for long bridged tasks): the usage guide's `## Orchestration & model steering` section - `flowctl usage --orchestration`. Make it durable by writing the routing into your instruction file: [Durable routing](#durable-routing--a-model-table-in-claudemd).
 
 ### Per-spec backend fields: external orchestrators
 
@@ -439,11 +439,11 @@ Two rules are load-bearing:
 - **The wrapper MUST run the bridge in the foreground** - one blocking Bash call. A backgrounded bridge loses the completion signal and the wrapper idles forever on a finished (or silently dead) process.
 - **The self-heal license covers environment and flags only, never judgment.** In scope: git trust (`--skip-git-repo-check`, `git init` in a scratch dir), sandbox flags, stale model ids, empty-output retry. Out of scope: rewriting the task prompt, interpreting review verdicts, or switching models on quality grounds - judgment stays with the host.
 
-This is a documented pattern, not a shipped agent type - the bridge recipes live in the usage guide's `## Orchestration & model steering` section (`flowctl usage`). Interactive sessions don't need it.
+This is a documented pattern, not a shipped agent type - the bridge recipes live in the usage guide's `## Orchestration & model steering` section (`flowctl usage --orchestration`). Interactive sessions don't need it.
 
 ### Raw-bridge review prompts: demand severity tiers
 
-Applies to **ad-hoc bridge reviews only** - a hand-rolled `codex exec` review whose output a human reads directly (the usage.md recipes). When you write one, put two things in the prompt:
+Applies to **ad-hoc bridge reviews only** - a hand-rolled `codex exec` review whose output a human reads directly (the `flowctl usage --orchestration` recipes). When you write one, put two things in the prompt:
 
 - **P0-P3 severity tiers plus spec-grounded verdicts**, so an edge-case finding does not flip a ship gate. Reviewers reliably flag spec-gray edges as bugs (in the eval, behavior explicitly licensed by a plan amendment was reported as a defect by every reviewer) - severity tiers and "cite the spec line" are what keep those findings informative instead of gate-flipping.
 - Optionally **a minimal suggested fix and blast radius per finding** when no fix loop follows the review. Control runs showed this artifact is prompt-shaped: models produce it when the prompt demands it and omit it when not asked.
@@ -587,7 +587,7 @@ The host judges each item against the paragraph and prints the reason with each 
 
 This page lives in the plugin's doc tree - *outside* the repo you're working in. At use time the host agent reads two files that ship into your project, so the steering recipes are put where agents already look:
 
-- **The usage guide** carries an `## Orchestration & model steering` section, read on demand - the always-loaded CLAUDE.md/AGENTS.md block points agents at it. Agents pull it live via `flowctl usage`, so it is always current with the installed plugin. It contains: the headless `codex exec` / `cursor-agent` / `claude -p` bridge commands and the flow-next shortcuts (`review.backend`, per-task `review:`, prompted-orchestration examples). The bridges run in **every direction** - `claude -p` lets a Codex or Cursor host conduct Claude the same way; any harness that can run Bash can be the conductor.
+- **The usage guide** carries an `## Orchestration & model steering` section, read on demand - the always-loaded CLAUDE.md/AGENTS.md block points agents at it. Agents pull it live via `flowctl usage --orchestration`, so it is always current with the installed plugin. It contains: the headless `codex exec` / `cursor-agent` / `claude -p` bridge commands and the flow-next shortcuts (`review.backend`, per-task `review:`, prompted-orchestration examples). The bridges run in **every direction** - `claude -p` lets a Codex or Cursor host conduct Claude the same way; any harness that can run Bash can be the conductor.
 - **`CLAUDE.md` / `AGENTS.md`** can hold the durable routing block above: `/flow-next:setup` offers, as an optional ceremony step, to scaffold it live - annotated for the CLIs you actually have installed, shown in full before writing, yours to edit after. Marker-fenced so `/flow-next:uninstall` can remove it cleanly.
 
 ## What stays fixed

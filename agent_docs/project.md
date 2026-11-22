@@ -23,7 +23,7 @@ backend dispatch and the triage-skip judge are licensed subprocess-judgment
 exceptions for independent review. Implementation offload is host-orchestrated:
 the child implements while the host retains git, scope, and verdict authority.
 Read [orchestration.md](../plugins/flow-next/docs/orchestration.md) and
-`flowctl usage` before changing or using model steering or bridge routes.
+`flowctl usage --orchestration` before changing or using model steering or bridge routes.
 
 Pass resolvable artifact paths and commit ranges instead of embedding evidence
 bodies in prompts. Preserve the no-embed dispatch contract; prompt payload

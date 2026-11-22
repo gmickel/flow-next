@@ -716,11 +716,12 @@ fi
 # elsewhere keeps `/flow-next:` (agents resolve those contextually; this file
 # is a user-facing project doc where a literal `/flow-next:work` invocation
 # would hit an unavailable command). Validation below guards regression.
-setup_usage="$CODEX_DIR/templates/usage.md"
-if [ -f "$setup_usage" ]; then
-  sed -i.bak -E 's|/flow-next:([a-z-]+)|$flow-next-\1|g' "$setup_usage"
-  rm -f "${setup_usage}.bak"
-fi
+for setup_usage in "$CODEX_DIR/templates/usage.md" "$CODEX_DIR/templates/usage-orchestration.md"; do
+  if [ -f "$setup_usage" ]; then
+    sed -i.bak -E 's|/flow-next:([a-z-]+)|$flow-next-\1|g' "$setup_usage"
+    rm -f "${setup_usage}.bak"
+  fi
+done
 
 # fn-126 R4: the Codex mirror is consumed ONLY by Codex. Replace the multi-host
 # Step-0 detection cascade with unconditional PLATFORM="codex" (canonical hosts
@@ -2083,13 +2084,13 @@ fi
 # it is what `flowctl usage` prints on Codex, where commands resolve as
 # `$flow-next-<cmd>`, not `/flow-next:<cmd>`. The targeted rewrite above must
 # have converted every token.
-usage_slash_refs=$( { grep -c '/flow-next:' "$CODEX_DIR/templates/usage.md" 2>/dev/null || true; } | tr -d ' ')
+usage_slash_refs=$( { grep -ch '/flow-next:' "$CODEX_DIR/templates/usage.md" "$CODEX_DIR/templates/usage-orchestration.md" 2>/dev/null || true; } | awk '{s+=$1} END {print s+0}' )
 [ -n "$usage_slash_refs" ] || usage_slash_refs=0
 if [ "$usage_slash_refs" != "0" ]; then
-  echo -e "  ${RED}✗${NC} $usage_slash_refs '/flow-next:' refs remain in codex templates/usage.md — should be \$flow-next-<cmd>"
+  echo -e "  ${RED}✗${NC} $usage_slash_refs '/flow-next:' refs remain in codex templates/usage*.md — should be \$flow-next-<cmd>"
   errors=$((errors + 1))
 else
-  echo -e "  ${GREEN}✓${NC} No '/flow-next:' refs in codex templates/usage.md"
+  echo -e "  ${GREEN}✓${NC} No '/flow-next:' refs in codex templates/usage*.md"
 fi
 
 # fn-197: setup is copy-less on every host — the mirror must ship the converged

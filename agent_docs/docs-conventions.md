@@ -17,7 +17,7 @@ content.
 |---|---|
 | [`prose.md`](../plugins/flow-next/docs/prose.md) | Every emission point: 20 skills and 2 agents cite it before drafting a PR body, spec, comment, memory entry, or changelog line |
 | [`flowctl.md`](../plugins/flow-next/docs/flowctl.md) | `templates/usage.md` and the qa, flow, impl-review, and spec-completion-review skills point at command sections; the surface test checks every documented leaf command exists |
-| [`orchestration.md`](../plugins/flow-next/docs/orchestration.md) | `templates/usage.md` links the tiers and reach sections; the Cursor host test pins the alias-to-inherit statement |
+| [`orchestration.md`](../plugins/flow-next/docs/orchestration.md) | `templates/usage-orchestration.md` links the tiers and reach sections; the Cursor host test pins the alias-to-inherit statement |
 | [`reach/README.md`](../plugins/flow-next/docs/reach/README.md) and the per-harness pages | The worker and work phases resolve the implementer tier through reach; the capture, make-pr, and setup skills read `reach/codex.md` and `reach/cursor.md`; the Codex installer test checks the tree |
 | [`read-back.md`](../plugins/flow-next/docs/read-back.md) | Capture, plan, and refine read it before the first `.flow/` write |
 | [`pipeline-variations.md`](../plugins/flow-next/docs/pipeline-variations.md) | The flow skill's `route-matrix.md` and capture's rewrite mode cite it; the routing test scans it as a consumer of the shared routing reference |

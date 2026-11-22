@@ -1819,7 +1819,7 @@ def removed_config_keys_note(keys: list[str]) -> str:
     if any(key.startswith(("work.", "models.")) for key in keys):
         guidance.append(
             "Routing uses the model-routing block /flow-next:setup writes into "
-            "CLAUDE.md / AGENTS.md plus the recipes in `flowctl usage`."
+            "CLAUDE.md / AGENTS.md plus the recipes in `flowctl usage --orchestration`."
         )
     if "artifacts.html.enabled" in keys:
         guidance.append(
@@ -20201,28 +20201,30 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
 
 
 def cmd_usage(args: argparse.Namespace) -> None:
-    """Print the bundled usage guide (CLI cheatsheet + orchestration recipes).
+    """Print the bundled usage guide (CLI cheatsheet, or --orchestration bridge recipes).
 
     Resolution: plugin-bundled canonical first (always current with the
-    installed plugin version), repo-local .flow/usage.md as fallback for
+    installed plugin version), repo-local .flow/<filename> as fallback for
     copied installs (.flow/bin/flowctl.py has no plugin tree around it).
 
     With --stages <spec-id> (fn-178): summarize stage-outcome lines instead.
+    With --orchestration: print multi-CLI bridge & model-steering recipes.
     """
     if getattr(args, "stages", None):
         _usage_stage_summary(args.stages, use_json=bool(getattr(args, "json", False)))
         return
+    filename = "usage-orchestration.md" if getattr(args, "orchestration", False) else "usage.md"
     here = Path(__file__).resolve().parent
     candidates = [
-        here.parent / "templates" / "usage.md",
-        get_flow_dir() / "usage.md",
+        here.parent / "templates" / filename,
+        get_flow_dir() / filename,
     ]
     for cand in candidates:
         if cand.is_file():
             print(cand.read_text(encoding="utf-8"), end="")
             return
     error_exit(
-        "No usage guide found (searched the plugin's templates/usage.md, then .flow/usage.md). "
+        f"No usage guide found (searched the plugin's templates/{filename}, then .flow/{filename}). "
         "Reinstall or update the flow-next plugin.",
         use_json=False,
     )
@@ -33050,6 +33052,7 @@ def cmd_specs(args: argparse.Namespace) -> None:
                 "ready": bool(spec_data.get("ready", False)),
                 # fn-214 (R1): same explicit-boolean contract as ready.
                 "no_plan": bool(spec_data.get("no_plan", False)),
+                "depends_on_epics": list(spec_data.get("depends_on_epics") or []),
                 "tasks": task_count,
                 "done": done_count,
                 **({"retired": spec_data["retired"]} if "retired" in spec_data else {}),
@@ -60235,7 +60238,12 @@ def main() -> None:
 
     # usage
     p_usage = subparsers.add_parser(
-        "usage", help="Print the bundled usage guide (CLI + orchestration recipes)"
+        "usage", help="Print the bundled usage guide (CLI cheatsheet; --orchestration for bridge recipes)"
+    )
+    p_usage.add_argument(
+        "--orchestration",
+        action="store_true",
+        help="Print the multi-CLI bridge and model-steering recipes",
     )
     p_usage.add_argument(
         "--stages",

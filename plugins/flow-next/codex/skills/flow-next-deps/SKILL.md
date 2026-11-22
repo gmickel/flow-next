@@ -26,38 +26,31 @@ command -v jq >/dev/null 2>&1 && echo "OK: jq installed" || echo "ERROR: brew in
 
 ## Step 1: Gather Spec Data
 
-Build a consolidated view of all specs with their dependencies — a single per-spec loop for the whole skill, over open specs only (a done spec needs only its status, which the specs list carries). Steps 2 and 3 reuse the cached file (bash vars do not survive across prompt turns, so the cache is a file at a literal agent-composed path — compose `<suffix>` once, e.g. 4 random chars, and reuse the same literal path in every later block):
+Build a consolidated view of all specs with their dependencies in a single `flowctl specs --json` call (`depends_on_epics` is included directly in `specs --json`, so no per-spec `flowctl show` loop is needed). Steps 2 and 3 reuse the cached file (bash vars do not survive across prompt turns, so the cache is a file at a literal agent-composed path — compose `<suffix>` once, e.g. 4 random chars, and reuse the same literal path in every later block):
 
 ```bash
-# ONE gather — Steps 2 and 3 read this file; never re-run the per-spec loop
+# ONE gather — Steps 2 and 3 read this file; no per-spec flowctl show loop
 SPECS_FILE="${TMPDIR:-/tmp}/flow-deps-specs-<suffix>.json"
-SPECS_LIST="$($FLOWCTL specs --json)"
-{
-  printf '%s' "$SPECS_LIST" | jq -c '.specs[] | select(.status == "done") | {id, title, status}'
-  printf '%s' "$SPECS_LIST" | jq -r '.specs[] | select(.status != "done") | .id' | while read -r id; do
-    $FLOWCTL show "$id" --json | jq -c '{
-      id: .id,
-      title: .title,
-      status: .status,
-      plan_review: .plan_review_status,
-      deps: (.depends_on_epics // [])
-    }'
-  done
-} | jq -s '.' > "$SPECS_FILE"
+"$FLOWCTL" specs --json | jq '[.specs[] | {
+  id: .id,
+  title: .title,
+  status: .status,
+  deps: (.depends_on_epics // [])
+}]' > "$SPECS_FILE"
 jq -r --arg f "$SPECS_FILE" '"Gathered \(length) specs (\([.[] | select(.status != "done")] | length) open) -> \($f)"' "$SPECS_FILE"
 ```
 
 ### Done when
 
-- `$SPECS_FILE` exists at the composed literal path and parses as a JSON array with one object per spec returned by `flowctl specs --json`.
-- The per-spec `flowctl show` loop has run exactly once for this invocation, over the open specs. **Steps 2 and 3 read that file.** A second run of the gather loop has broken this.
+- `$SPECS_FILE` exists at the composed literal path and parses as a JSON array with one object per spec returned by `flowctl specs --json`, including `.deps` from `.depends_on_epics`.
+- Data was gathered in one `flowctl specs --json` call with zero per-spec `flowctl show` calls. **Steps 2 and 3 read that file.** A second gather has broken this.
 
 ## Step 2: Identify Blocking Chains
 
 Determine which specs are ready vs blocked (pure jq, works on any shell):
 
 ```bash
-# Reuse the Step 1 gather — same literal path, NO re-fetch (one heavy loop total)
+# Reuse the Step 1 gather — same literal path, NO re-fetch (one gather total)
 SPECS_FILE="${TMPDIR:-/tmp}/flow-deps-specs-<suffix>.json"
 
 # Compute blocking status
@@ -83,14 +76,14 @@ jq -r '
 ### Done when
 
 - Every non-`done` spec in `$SPECS_FILE` emitted exactly one `READY:` or `BLOCKED:` line, and each `BLOCKED:` line names the specific deps holding it.
-- The jq ran against the cached file, not a fresh `flowctl show` sweep.
+- The jq ran against the cached file, not a fresh `flowctl specs` or `flowctl show` call.
 
 ## Step 3: Compute Execution Phases
 
 Group specs into parallel execution phases:
 
 ```bash
-# Reuse the Step 1 gather — same literal path, NO re-fetch (one heavy loop total)
+# Reuse the Step 1 gather — same literal path, NO re-fetch (one gather total)
 SPECS_FILE="${TMPDIR:-/tmp}/flow-deps-specs-<suffix>.json"
 
 # fence:deps-phases

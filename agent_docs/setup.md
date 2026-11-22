@@ -14,7 +14,7 @@ Repos set up before fn-197 carry those snapshots. They are inert: nothing reads 
 |---|---|
 | flowctl (skills) | The three-rung FLOWCTL preamble: `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl` → the plugin root derived as the directory two levels above the loading skill's own SKILL.md (Cursor, Grok) → `.flow/bin/flowctl` as a silent legacy backstop. The Codex mirror's rung 1 is `${CODEX_HOME:-$HOME/.codex}/scripts/flowctl`. |
 | flowctl (plain Bash, no skill) | Bare `flowctl` where the host injects the plugin's `bin/` onto PATH (Claude Code); otherwise call the plugin's `scripts/flowctl` by path. |
-| Usage guide | `flowctl usage` → bundled `plugins/flow-next/templates/usage.md`. A repo-local `.flow/usage.md` is honored only as inert legacy grace. |
+| Usage guide | `flowctl usage` → bundled `plugins/flow-next/templates/usage.md`; `flowctl usage --orchestration` → bundled `templates/usage-orchestration.md` (bridge and model-steering recipes). A repo-local `.flow/usage.md` is honored only as inert legacy grace. |
 | Spec template | 3-tier cascade: `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. |
 | Agent rail | The versioned docs snippet (`claude-md-snippet.md` / `agents-md-snippet.md`) inside the `FLOW-NEXT` marker block, with trigger-shaped `flowctl usage` pull directives. |
 
@@ -30,7 +30,7 @@ Repos set up before fn-197 carry those snapshots. They are inert: nothing reads 
 ## Where things live
 
 - Snippet templates: `plugins/flow-next/skills/flow-next-setup/templates/claude-md-snippet.md` / `agents-md-snippet.md` / `model-routing-snippet.md`.
-- Canonical usage guide: `plugins/flow-next/templates/usage.md`; `flowctl usage` resolution is covered by `tests/test_cmd_usage.py`.
+- Canonical usage guide: `plugins/flow-next/templates/usage.md` (orchestration recipes: `templates/usage-orchestration.md`); `flowctl usage` resolution is covered by `tests/test_cmd_usage.py`.
 - Canonical spec scaffold: `plugins/flow-next/templates/spec.md`; the resolution walker is single-sourced in `plugins/flow-next/references/spec-template-discovery.md`.
 - Legacy-artifact list (the single source both cleanup touchpoints read): `LEGACY_COPY_ARTIFACTS` in `plugins/flow-next/scripts/flowctl.py`.
 - Launcher: `plugins/flow-next/scripts/flowctl`; `scripts/flowctl.cmd` is the cmd.exe / PowerShell sibling. There is no top-level `bin/`: claude.ai, Cowork and organization sync refuse a plugin that ships one (#506).

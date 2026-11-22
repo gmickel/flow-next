@@ -22,7 +22,7 @@ HELP_NAME = "flowctl-help.txt"
 # (flowctl_tracker/MANIFEST.json) - one integrity mechanism, verified by
 # installers post-copy, consulted here only to authenticate the static-help
 # fast path. A missing/stale manifest declines the fast path safely.
-HELP_SHA256 = "3062c6546a1f07bf2f7c1c0beb83e6312bde15f62bd44a41915de32c2e216c6a"
+HELP_SHA256 = "f8d084acd4503734a6675dd61a47e9b20d7b80f582c66944406850115e824bab"
 HELP_PYTHON = (3, 14)
 HELP_WRAP_PYTHONS = ((3, 11), (3, 12))
 HELP_SUPPORTED_PYTHONS = (*HELP_WRAP_PYTHONS, (3, 13), HELP_PYTHON)
@@ -75,8 +75,8 @@ def _repo_root() -> Path:
         return Path.cwd()
 
 
-def _usage_fast_path(source: Path) -> int:
-    bundled = source.parent.parent / "templates" / "usage.md"
+def _usage_fast_path(source: Path, filename: str = "usage.md") -> int:
+    bundled = source.parent.parent / "templates" / filename
     try:
         if bundled.is_file():
             sys.stdout.write(bundled.read_text(encoding="utf-8"))
@@ -84,7 +84,7 @@ def _usage_fast_path(source: Path) -> int:
     except OSError:
         pass
 
-    local = _repo_root() / ".flow" / "usage.md"
+    local = _repo_root() / ".flow" / filename
     for candidate in (local,):
         try:
             if candidate.is_file():
@@ -92,7 +92,14 @@ def _usage_fast_path(source: Path) -> int:
                 return 0
         except OSError:
             continue
-    print(f"Error: {USAGE_ERROR}", file=sys.stderr)
+    if filename == "usage.md":
+        print(f"Error: {USAGE_ERROR}", file=sys.stderr)
+    else:
+        print(
+            f"Error: No usage guide found (searched the plugin's templates/{filename}, "
+            f"then .flow/{filename}). Reinstall or update the flow-next plugin.",
+            file=sys.stderr,
+        )
     return 1
 
 
@@ -180,7 +187,9 @@ def main() -> int:
 
     source = Path(__file__).resolve().with_name(SOURCE_NAME)
     if sys.argv[1:] == ["usage"]:
-        return _usage_fast_path(source)
+        return _usage_fast_path(source, "usage.md")
+    if sys.argv[1:] == ["usage", "--orchestration"]:
+        return _usage_fast_path(source, "usage-orchestration.md")
     if sys.argv[1:] == ["--help"] and _root_help_fast_path(source):
         return 0
 

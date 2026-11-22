@@ -1,0 +1,124 @@
+# Flow-Next Orchestration & Model Steering
+
+## Orchestration & model steering
+
+flow-next skills are prompts the host agent executes — so you (the host) can route work across model families with zero code. **Defaults are pre-tuned; none of this is required** — reach for it only when your model mix, subscriptions, or taste differ. Full guide: [`docs/orchestration.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/orchestration.md) · https://flow-next.dev/guides/model-routing/
+
+**Tiers and reach.** A **tier** is what kind of model a job wants — `reviewer`, `implementer`, `fast scout`, `thinking scout`, or unset (the session model, and the majority). **Reach** is how *this* harness gets one: the in-session model, an in-host subagent, another CLI over a bridge, or not available. Write your preferences once as `<tier>: <model>` (optionally `at <effort>`) in `CLAUDE.md` / `AGENTS.md` — `/flow-next:setup` scaffolds the block commented out, and the model names are yours, verified against your own account. Routing precedence, highest first: an explicit argument in the invocation, then that routing block, then the agent definition's own default, then the session model — a model this harness cannot reach falls back to the session model, says so once, and continues. Tier definitions: [`docs/orchestration.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants); per-harness reach: [`docs/reach/`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/reach/README.md).
+
+**Headless CLI bridges** — drive another harness from a Bash call with a *self-contained* prompt (full context in, digest back). **Safety rule for every recipe below: the bridged child writes code and may commit checkpoints on the branch the host names; the host keeps push, review, `flowctl done`, task state, and any history rewrite.** The child never pushes, never rebases or rewrites history, never decides scope, never issues a review verdict, and never spawns a bridge of its own. A local commit is reversible and reviewable; push, rewrite, scope, and verdict are the bounds that matter.
+
+```bash
+# codex exec DEFAULTS to a read-only sandbox. Redirect stdin from /dev/null —
+# spawned by another agent it hangs indefinitely on inherited non-TTY stdin.
+# ALWAYS pass --skip-git-repo-check: outside a trusted git repo codex refuses in ~1s
+# with the error only in the log — a fire-and-forget caller sees a clean, silent failure.
+codex exec -s read-only --skip-git-repo-check "<self-contained investigation prompt>" </dev/null               # read-only investigation
+# WRITE mode: the flag also disables codex's git-repo preflight — your rollback boundary.
+# Assert the intended workspace FIRST (or `git init` a scratch dir), so the flag only
+# suppresses the silent-refusal failure mode, never the safety check:
+[ "$(git rev-parse --show-toplevel 2>/dev/null)" = "<intended-repo-root>" ] && \
+codex exec --sandbox workspace-write --skip-git-repo-check -o out.md "<self-contained impl prompt>" </dev/null  # implement + capture result via -o/--output-last-message (never stdout scraping; --full-auto is deprecated)
+# workspace-write keeps .git/ READ-ONLY: `git commit` fails with "index.lock: Read-only file system" (verified on 0.153.4).
+# A child that should commit checkpoints (long-task brief below) runs `--sandbox danger-full-access` inside the
+# repo root you just asserted; a run that must stay in workspace-write uses the one-run-per-scope-unit fallback.
+
+# cursor-agent: -p print mode; --force actually APPLIES edits (else proposed-only).
+# Run it INSIDE a git repo (`git init` scratch dirs first): in a non-repo dir it blocks on an
+# interactive workspace-trust prompt and exits "successfully" with empty output.
+CURSOR_API_KEY=... cursor-agent -p --force --model <id> "<prompt>"                        # model IDs are volatile → cursor-agent --list-models
+
+# claude -p: the same bridge in REVERSE — drive Claude headlessly from a Codex/Cursor host.
+claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Bash" </dev/null  # prompt BEFORE --allowedTools (variadic — it swallows trailing args); edits need --permission-mode acceptEdits
+
+# grok: xAI's Grok Build CLI (v0.2.x alpha) - a full headless EDITING agent, same class as codex
+# exec / cursor-agent, on its own quota. FLAGS BEFORE -p: `-p/--single` consumes the NEXT token as
+# the prompt, so `grok -p --always-approve "..."` misparses (live-verified failure mode).
+# Model + effort are separate flags: `-m <model> --reasoning-effort high` (NOT a fused `-m <model>-high`).
+grok -m <model> --reasoning-effort high -p "<self-contained prompt>" </dev/null             # read-only one-shot
+grok --always-approve --no-plan -m <model> --reasoning-effort high -p "<self-contained prompt>" </dev/null  # WRITE mode (blanket; trusted git dir ONLY - acceptEdits skips Bash and silently truncates shell-using tasks). Extras: --check, --best-of-n N, --json-schema. Ask the CLI what it offers (`grok --help`, host catalog) rather than copying an identifier from a doc.
+
+# agy: Google's Antigravity CLI (1.5.x) - a headless EDITING agent that commits without
+# --dangerously-skip-permissions. FLAGS BEFORE -p (it takes the next token as the prompt).
+# --print-timeout bounds the turn (default 0 = no limit). --settings (inline JSON or a file,
+# session only) denies push and history rewrite at the tool level: one rule per command,
+# regex without `\`, `+` or parentheses (rules using them silently match nothing; verified 1.5.13).
+# A guard, not containment: `git -C <dir> push` does not match, so the host still checks the remote.
+cat > "$HOME/.agy-bridge.json" <<'EOF'   # outside the worktree, so the child cannot commit it
+{"permissions":{"deny":["command(regex:git push.*)","command(regex:git rebase.*)","command(regex:git reset.*)",
+ "command(regex:git filter-branch.*)","command(regex:git filter-repo.*)","command(regex:git update-ref.*)",
+ "command(regex:git commit.*--amend.*)"]}}
+EOF
+OUT="$(mktemp -d)/agy-out.json"   # private, per call, outside the worktree
+agy --model <model> --settings "$HOME/.agy-bridge.json" --output-format json --print-timeout 1800s -p "<self-contained prompt>" </dev/null >"$OUT"
+# Success = exit 0 AND .status == "SUCCESS" in "$OUT" (answer in .response). A non-zero exit, any
+# other status, or an empty <base>..HEAD diff is a failed bridge call. `--mode plan` is NOT read-only.
+```
+
+The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m <model> -c model_reasoning_effort=<effort> "<prompt>"` steers a different tier of the same family. It is one route, not the only one. Since codex-cli 0.146.0, `spawn_agent` model and effort steering works on both the role path and the explicit-parameter path (the codex reach page carries the precedence rule and the two dispatch gotchas). Known upstream issue: openai/codex#33267, a `codex exec` parent unable to decode the result of a child that fanned out subagents, is reported on codex-cli 0.144 to 0.145 and has not reproduced on 0.153. A bridged child on a current build may fan out; on a build in the reported range, keep the child prompt flat.
+
+**Which tier to bridge to:** on well-specified work a value-tier implementer matches a strong-tier one on correctness at roughly two-thirds the wall clock, so send clear, well-scoped tasks to the value tier and escalate to the strong tier only for the genuinely gnarly ones. Spec quality is what makes that trade safe — a vague brief burns the saving on rework.
+
+**Thin-wrapper recipe:** a quick interactive bridge call can stay raw. For a long-running, unattended, or parallel bridge, dispatch a thin fast-tier subagent that composes the self-contained prompt, runs the bridge **in the foreground**, verifies non-empty/parseable output, repairs environment or flag failures once, and returns only a digest. The wrapper never changes the task, model, or verdict and never delegates recursively; judgment stays with the host.
+
+**Long bridged tasks: the host's return handling and the brief.** Record the base commit before dispatch (`git rev-parse HEAD`). On return, review the child's commit range from that base (`<base>..HEAD`, the same range the in-host worker path gets), run the gates on that diff, and decide as the host whether the checkpoints squash or stay. The brief for a task that runs for hours states the branch and commit convention, the checkpoint unit, the five never clauses, and one return condition. Do **not** add a timebox or a "stop cleanly if you run out of room" line: it teaches the child to return partial, and every partial return costs a fresh context and a re-brief.
+
+```text
+Branch: <branch>, already checked out. Commit each completed scope unit (one spec step or one
+commit-sized unit) as a checkpoint on this branch: git add -- <files you changed> .flow/ && git commit -m "<type>(<scope>): <what>".
+Never push. Never rebase, amend, or rewrite history. Never change the scope. Never issue a review
+verdict. Never spawn another bridge. You own delegation for this scope: parallel implementation of
+independent surfaces, background research, scouting - the shape is yours to choose at execution time,
+and a host without nested dispatch degrades to serial, never errors. You are the only committer: hand
+subagents disjoint surfaces or serialize, and await and reconcile every subagent before staging,
+verification, and commit. Return only when this scope is done or blocked, with the commit list, the
+number of subagents you dispatched, and anything blocked. If the sandbox denies git commit, leave the
+tree as it is and say so in your digest.
+```
+
+The never-list bounds push, history, scope, verdict, and a nested bridge, never the owner's own delegation. The delegation sentences are the judicious-subagent license the in-host worker holds on the no-plan route, so whoever implements owns delegation wherever it runs. A brief that adds "never spawn another agent" narrows the owner without a requirement.
+
+Sandbox that denies commits (read-only, or `workspace-write` on codex): fall back to one run per scope unit with the host committing between runs; the child reports the denied commit in its digest rather than returning a silently dirty tree.
+
+Harness-relative: every direction works — from Claude Code the bridges are `codex exec` / `cursor-agent`; from Codex or Cursor they are `claude -p` / the other CLI. Any harness that can run Bash can conduct the others.
+
+**Cursor host** — agent-frontmatter tiering is ignored on Cursor; routing lives in the AGENTS.md routing block plus the model named in the dispatch itself (setup scaffolds the block). Distinct from the headless `cursor` CLI backend below. Full reach page: [`docs/reach/cursor.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/reach/cursor.md).
+
+- **Naming a model:** Cursor takes its own identifiers, and they are volatile — ask the harness (`cursor-agent --list-models`, host catalog) instead of copying one from a document.
+- **Tier degrade:** `agents/*.md` family aliases resolve to **inherit** (the session model) on Cursor; no alias rewrite exists or is planned. Naming the model in the dispatch is the escape hatch.
+- **`review.backend host`:** bare only (`host:<model>` rejected). The model comes from the AGENTS.md routing block — **not** from the backend string. Host-native fresh-context subagent; preferred from inside Cursor.
+- **≠ `cursor` CLI backend:** `review.backend cursor:…` / `cursor-agent` is a separate headless subprocess path (multi-family reach from outside Cursor; circular from inside).
+- **Cross-family rule:** reviewer family ≠ writer family (measured from the writer).
+
+```bash
+# In-session impl + host review (reviewer tier comes from the AGENTS.md routing block)
+flowctl config set review.backend host     # or per-run: --review=host
+# /flow-next:work fn-12  → session implements; the host review runs the reviewer tier from your routing block
+
+# Bridges FROM a Cursor host (same recipes as above, reverse direction)
+claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Bash" </dev/null
+codex exec -s read-only --skip-git-repo-check "<prompt>" </dev/null
+```
+
+**flow-next config shortcuts** — the routing flow-next machinery reads for itself. Implementation offload has no packaged config: use the bridge recipes above, and make them standing policy by writing them into `CLAUDE.md`/`AGENTS.md`.
+
+```bash
+# Cross-family review — the model that writes is never the model that reviews
+flowctl config set review.backend codex                              # or host | cursor:<model> | claude:<model>:<effort>
+flowctl task set-backend fn-1-add-oauth.3 --review cursor:<model>     # per-task review: override
+flowctl task set-backend fn-1-add-oauth.4 --review claude:<model>:high  # Claude Code CLI reviewer (same-family from Claude Code; the receipt records it)
+```
+
+**Prompted orchestration** — describe the policy; the host judges per item, no parameter required:
+
+```text
+Work the ready specs — decide per spec by complexity: auth/migration tasks you
+implement yourself; plain CRUD goes out to a codex exec bridge. Reviews from codex either way.
+
+Run /flow-next:work fn-12, bridging implementation to codex exec. If a task's review
+comes back NEEDS_WORK twice, stop bridging it and implement it yourself on the session model.
+```
+
+None of these pairings are fixed — any stage of any flow-next pipeline (research, implementation, review, QA) can route to whatever harness you can reach from Bash: describe the arrangement in the invocation or your instruction files and the host builds it.
+
+Make any of this durable by writing it into `CLAUDE.md`/`AGENTS.md` — the host reads your instruction files every session and flow-next skills inherit them automatically.
