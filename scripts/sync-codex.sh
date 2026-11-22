@@ -1688,7 +1688,7 @@ generate_openai_yaml() {
 
 # Workflow skills (blue, implicit - surfaced in the model catalog so prose
 # like "plan this feature" / "pilot this to completion" resolves the skill)
-generate_openai_yaml "flow-next-plan"      "Flow Plan"      "Task breakdown for a spec, only when a person asks for a plan or flow-next-flow routes here" "#3B82F6" true "Break this spec into tasks: "
+generate_openai_yaml "flow-next-plan"      "Flow Plan"      "Task breakdown, only on a person's ask or flow's route" "#3B82F6" true "Break this spec into tasks: "
 generate_openai_yaml "flow-next-work"      "Flow Work"      "Execute planned tasks with worker subagents"          "#3B82F6" true "Work on: "
 generate_openai_yaml "flow-next-refine"    "Flow Refine"    "Refine a spec or task: deep Q&A, or a read-only external-docs research pass" "#3B82F6" true
 generate_openai_yaml "flow-next-setup"     "Flow Setup"     "Initialize flow-next in current project"              "#3B82F6" true
@@ -1762,7 +1762,7 @@ python3 - "$CODEX_DIR" <<'PYEOF'
 import sys, pathlib
 codex_dir = pathlib.Path(sys.argv[1])
 DIET = {
-    "flow-next-plan": "Task breakdown for a spec, only when a person explicitly asks for a plan or task breakdown, or flow-next-flow routes here. Never for a request to build, implement or deliver a spec, whoever asks.",
+    "flow-next-plan": "Task breakdown for a spec, only on a person's explicit ask (direct or relayed in a brief), $flow-next-plan, or a flow-next-flow route. Never for a request to build, implement, deliver or run a spec.",
     "flow-next-work": "Execute a flow-next spec or task with workers, gates and commits. Run when the work command is typed or flow-next-flow routes here; plain requests to implement fn-N go to flow-next-flow.",
     "flow-next-land": "Resolve feedback and CI for one named pull request, then merge when authorized and ready. Emits LAND_VERDICT. Use when asked to land a pull request.",
     "flow-next-make-pr": "Open a PR with a cognitive-aid body rendered from flow-next spec state via gh, or a GitLab merge request via glab. Use whenever asked to make or open a PR in a flow-next repo.",

@@ -525,7 +525,7 @@ Don't try to roll out all 26 commands at once. Layer them in.
 Turn on three commands. Use them on one spec.
 
 - `/flow-next:capture` - write the spec from a discussion the team had this week.
-- `/flow-next:work` - implement the spec directly.
+- `/flow-next:work <spec-id> --no-plan` - implement the spec directly.
 - `/flow-next:plan` - only when you want the spec broken into tasks first.
 
 Skip review for the first spec. Skip `flow --auto`. The goal is to feel the lifecycle on a real piece of work.

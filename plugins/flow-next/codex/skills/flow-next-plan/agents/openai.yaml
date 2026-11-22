@@ -1,6 +1,6 @@
 interface:
   display_name: "Flow Plan"
-  short_description: "Task breakdown for a spec, only when a person asks for a plan or flow-next-flow routes here"
+  short_description: "Task breakdown, only on a person's ask or flow's route"
   brand_color: "#3B82F6"
   default_prompt: "Break this spec into tasks: "
 policy:

@@ -1,6 +1,6 @@
 ---
 name: flow-next-plan
-description: Task breakdown for a spec, only when a person explicitly asks for a plan or task breakdown, or flow-next-flow routes here. Never for a request to build, implement or deliver a spec, whoever asks.
+description: Task breakdown for a spec, only on a person's explicit ask (direct or relayed in a brief), $flow-next-plan, or a flow-next-flow route. Never for a request to build, implement, deliver or run a spec.
 user-invocable: false
 ---
 
