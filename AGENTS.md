@@ -37,7 +37,8 @@ This is a repo-customized block. Keep maintainer additions outside its markers.
 These are preferences, not facts about this session's model or available tools.
 Explicit user routing wins, then this block, agent defaults, and the session
 model. Planning, judgment, user-facing design, and native workers otherwise
-inherit the actual session model. Read `flowctl usage` before model steering.
+inherit the actual session model. Read `flowctl usage --orchestration` before
+model steering.
 
 For an OpenAI-family writer, prefer a reachable Claude-family reviewer through
 the configured review backend. Do not reuse the Claude entry point's OpenAI-family
@@ -54,7 +55,8 @@ the session model with one notice. Host review is the exception: preserve its
 fresh-context, tool-enforced read-only, cross-family requirement and fail closed
 if unavailable. Reviews through other backends retain their existing contracts.
 Escalate an inadequate cheaper implementation within the authorized scope.
-Unattended bridge calls use the thin-wrapper recipe in `flowctl usage`; the
+Unattended bridge calls use the thin-wrapper recipe in
+`flowctl usage --orchestration`; the
 bridged child may commit checkpoints on the named branch, and the host keeps
 push, history rewrite, review, task state, and verdict ownership.
 <!-- flow-next:model-routing:end -->

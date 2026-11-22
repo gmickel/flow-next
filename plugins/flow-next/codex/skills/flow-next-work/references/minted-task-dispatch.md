@@ -26,7 +26,7 @@ of independent surfaces, background research, scouting — the SHAPE is chosen b
 harness at execution time, never prescribed here. The holder is the owner wherever the
 owner runs: the in-host worker on the standard path, or the bridged child when
 worker.md's Phase 1b hands the task over a CLI bridge — the long-task brief in
-`flowctl usage` carries the same license, and the worker passes this paragraph through
+`flowctl usage --orchestration` carries the same license, and the worker passes this paragraph through
 to the child verbatim. Wrappers, scouts, and conductors never fan out on the owner's
 behalf (STRATEGY.md, "The owner holds the license"). A host without nested dispatch
 degrades to serial, never errors; no capability probing. Commit ownership unchanged:

@@ -112,6 +112,20 @@ class SpecDepCycleTestCase(unittest.TestCase):
         self.assertEqual(res.returncode, 0)
         self.assertTrue(json.loads(res.stdout)["success"])
 
+    def test_specs_json_carries_each_specs_dependencies(self) -> None:
+        # /flow-next:deps builds its graph from this one call.
+        for spec, dep in (("a", "b"), ("a", "c"), ("b", "d")):
+            self.assertEqual(self._add(spec, dep).returncode, 0)
+        res = self._run("specs", "--json")
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        rows = {row["id"]: row for row in json.loads(res.stdout)["specs"]}
+        self.assertEqual(rows[self.ids["a"]]["depends_on_epics"], self._path("b", "c"))
+        self.assertEqual(rows[self.ids["b"]]["depends_on_epics"], self._path("d"))
+        self.assertEqual(rows[self.ids["e"]]["depends_on_epics"], [])
+        for row in rows.values():
+            self.assertIn("no_plan", row)
+            self.assertIn("tasks", row)
+
     # ---- R3: whole-graph check over what is already on disk ----
     def test_validate_all_lists_each_cycle_once(self) -> None:
         self._write_deps("a", "b")

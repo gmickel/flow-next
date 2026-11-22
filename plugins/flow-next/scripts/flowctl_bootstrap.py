@@ -22,7 +22,7 @@ HELP_NAME = "flowctl-help.txt"
 # (flowctl_tracker/MANIFEST.json) - one integrity mechanism, verified by
 # installers post-copy, consulted here only to authenticate the static-help
 # fast path. A missing/stale manifest declines the fast path safely.
-HELP_SHA256 = "3062c6546a1f07bf2f7c1c0beb83e6312bde15f62bd44a41915de32c2e216c6a"
+HELP_SHA256 = "f8d084acd4503734a6675dd61a47e9b20d7b80f582c66944406850115e824bab"
 HELP_PYTHON = (3, 14)
 HELP_WRAP_PYTHONS = ((3, 11), (3, 12))
 HELP_SUPPORTED_PYTHONS = (*HELP_WRAP_PYTHONS, (3, 13), HELP_PYTHON)

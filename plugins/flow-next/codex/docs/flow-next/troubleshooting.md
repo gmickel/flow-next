@@ -116,7 +116,7 @@ Clearing a strike **does not re-ready the spec** - the two signals are orthogona
 **Symptom:** one non-blocking line like
 
 ```
-note: .flow/config.json still carries removed key(s): models.roles, models.verifiedAt; flowctl ignores them. Routing is now the model-routing block /flow-next:setup writes into CLAUDE.md / AGENTS.md plus the recipes in `flowctl usage` - route work there and delete these keys.
+note: .flow/config.json still carries removed key(s): models.roles, models.verifiedAt; flowctl ignores them. Routing is now the model-routing block /flow-next:setup writes into CLAUDE.md / AGENTS.md plus the recipes in `flowctl usage --orchestration` - route work there and delete these keys.
 ```
 
 **This is expected, not an error.** The role map (`models.roles`) and its staleness stamps (`models.verifiedAt` / `models.verifiedWith`), like the `work.delegate*` keys, are removed - flowctl reads none of them. The advisory prints at most once per invocation, on the config and work entry points only, and never blocks. Delete the keys when convenient.

@@ -510,7 +510,7 @@ Written:
 
 Nothing was copied into .flow/ — flowctl comes from the plugin install:
   flowctl --help        # every command
-  flowctl usage         # CLI cheatsheet + orchestration recipes, always current
+  flowctl usage         # CLI cheatsheet; --orchestration for bridge and model-steering recipes
 ```
 
 **If PLATFORM=cursor, also show:**

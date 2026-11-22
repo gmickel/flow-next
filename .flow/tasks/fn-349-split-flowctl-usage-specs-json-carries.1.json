@@ -1,0 +1,15 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-11-22T14:01:13.903195Z",
+  "depends_on": [],
+  "id": "fn-349-split-flowctl-usage-specs-json-carries.1",
+  "implicit_owner": true,
+  "priority": null,
+  "spec": "fn-349-split-flowctl-usage-specs-json-carries",
+  "spec_path": ".flow/tasks/fn-349-split-flowctl-usage-specs-json-carries.1.md",
+  "status": "done",
+  "title": "Implement Split flowctl usage; specs --json carries dependencies",
+  "updated_at": "2026-11-22T14:01:13.903195Z"
+}
