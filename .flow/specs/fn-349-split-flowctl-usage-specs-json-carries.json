@@ -15,7 +15,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-349-split-flowctl-usage-specs-json-carries.md",
-  "status": "open",
+  "status": "done",
   "title": "Split flowctl usage; specs --json carries dependencies",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-11-22T13:28:33.308414Z"
+  "updated_at": "2026-11-22T14:01:36.910152Z"
 }
