@@ -476,6 +476,79 @@ class GitHubWaitAndMergeTests(ForgeTestCase):
         got_q = self.run_with(fake_q, lambda: f.forge_merge(self.repo, 42, self.HEAD))
         self.assertEqual((got_q["merged"], got_q["reason"]), (False, "queued"))
 
+    def test_merge_retries_confirming_read_after_exit_zero(self):
+        merged_view = json.dumps({"state": "MERGED", "headRefOid": self.HEAD,
+                                  "mergeCommit": {"oid": self.MERGE_SHA}, "mergeQueueEntry": None})
+        open_view = json.dumps({"state": "OPEN", "headRefOid": self.HEAD,
+                                "mergeCommit": None, "mergeQueueEntry": None})
+        no_commit_view = json.dumps({"state": "MERGED", "headRefOid": self.HEAD,
+                                     "mergeCommit": None, "mergeQueueEntry": None})
+        queued_view = json.dumps({"state": "OPEN", "headRefOid": self.HEAD,
+                                  "mergeCommit": None, "mergeQueueEntry": {"position": 1}})
+        moved_view = json.dumps({"state": "OPEN", "headRefOid": "c" * 40,
+                                 "mergeCommit": None, "mergeQueueEntry": None})
+
+        # Confirming read fails once, then shows merged.
+        clock = _FakeClock()
+        fake = FakeCli(self.ORIGIN, gh=[(0, "", ""), (1, "", "shim banner\ntransient error"), (0, merged_view, "")])
+        got = self.run_with(fake, lambda: f.forge_merge(self.repo, 42, self.HEAD, sleep=clock.sleep))
+        self.assertEqual(got, {"merged": True, "merge_commit": self.MERGE_SHA,
+                               "reason": "merged", "message": "squash merged"})
+        self.assertEqual(len([c for c in fake.calls if c[:3] == ["gh", "pr", "merge"]]), 1)
+        self.assertEqual(len([c for c in fake.calls if c[:3] == ["gh", "pr", "view"]]), 2)
+        self.assertEqual(clock.sleeps, [f._MERGE_CONFIRM_INTERVAL_S])
+
+        # Confirming read shows OPEN, then MERGED without mergeCommit, then MERGED with mergeCommit.
+        clock2 = _FakeClock()
+        fake2 = FakeCli(self.ORIGIN, gh=[(0, "", ""), (0, open_view, ""), (0, no_commit_view, ""), (0, merged_view, "")])
+        got2 = self.run_with(fake2, lambda: f.forge_merge(self.repo, 42, self.HEAD, sleep=clock2.sleep))
+        self.assertEqual((got2["merged"], got2["reason"], got2["merge_commit"]), (True, "merged", self.MERGE_SHA))
+        self.assertEqual(len([c for c in fake2.calls if c[:3] == ["gh", "pr", "merge"]]), 1)
+        self.assertEqual(clock2.sleeps, [f._MERGE_CONFIRM_INTERVAL_S, f._MERGE_CONFIRM_INTERVAL_S])
+
+        # Stops repeating as soon as queued or head_moved appears.
+        for label, view, want in (("queued", queued_view, "queued"), ("head_moved", moved_view, "head_moved")):
+            with self.subTest(label):
+                c_early = _FakeClock()
+                fake_early = FakeCli(self.ORIGIN, gh=[(0, "", ""), (1, "", "transient"), (0, view, "")])
+                got_early = self.run_with(fake_early, lambda: f.forge_merge(
+                    self.repo, 42, self.HEAD, sleep=c_early.sleep))
+                self.assertEqual((got_early["merged"], got_early["reason"]), (False, want))
+                self.assertEqual(len([c for c in fake_early.calls if c[:3] == ["gh", "pr", "merge"]]), 1)
+                self.assertEqual(len([c for c in fake_early.calls if c[:3] == ["gh", "pr", "view"]]), 2)
+                self.assertEqual(c_early.sleeps, [f._MERGE_CONFIRM_INTERVAL_S])
+
+    def test_merge_returns_unconfirmed_when_confirming_reads_never_succeed(self):
+        open_view = json.dumps({"state": "OPEN", "headRefOid": self.HEAD,
+                                "mergeCommit": None, "mergeQueueEntry": None})
+        expected_reads = 1 + f._MERGE_CONFIRM_RETRIES
+        expected_sleeps = [f._MERGE_CONFIRM_INTERVAL_S] * f._MERGE_CONFIRM_RETRIES
+
+        for label, read_reply in (("read errors", (1, "", "shim banner")), ("still open", (0, open_view, ""))):
+            with self.subTest(label):
+                clock = _FakeClock()
+                fake = FakeCli(self.ORIGIN, gh=[(0, "", ""), *([read_reply] * expected_reads)])
+                got = self.run_with(fake, lambda: f.forge_merge(self.repo, 42, self.HEAD, sleep=clock.sleep))
+                self.assertEqual((got["merged"], got["reason"], got["merge_commit"]), (False, "unconfirmed", None))
+                self.assertIn("merge command succeeded", got["message"])
+                self.assertIn("could not be confirmed", got["message"])
+                self.assertEqual(len([c for c in fake.calls if c[:3] == ["gh", "pr", "merge"]]), 1)
+                self.assertEqual(len([c for c in fake.calls if c[:3] == ["gh", "pr", "view"]]), expected_reads)
+                self.assertEqual(clock.sleeps, expected_sleeps)
+
+    def test_merge_nonzero_exit_does_not_repeat_confirming_reads(self):
+        open_view = json.dumps({"state": "OPEN", "headRefOid": self.HEAD,
+                                "mergeCommit": None, "mergeQueueEntry": None})
+        for label, read_reply in (("read error", (1, "", "view failed")), ("still open", (0, open_view, ""))):
+            with self.subTest(label):
+                clock = _FakeClock()
+                fake = FakeCli(self.ORIGIN, gh=[(1, "", "Pull request is not mergeable"), read_reply])
+                got = self.run_with(fake, lambda: f.forge_merge(self.repo, 42, self.HEAD, sleep=clock.sleep))
+                self.assertEqual((got["merged"], got["reason"]), (False, "not_mergeable"))
+                self.assertEqual(len([c for c in fake.calls if c[:3] == ["gh", "pr", "merge"]]), 1)
+                self.assertEqual(len([c for c in fake.calls if c[:3] == ["gh", "pr", "view"]]), 1)
+                self.assertEqual(clock.sleeps, [])
+
 
 class GitLabWaitAndMergeTests(ForgeTestCase):
     HEAD = "d8b76161301680f873478db85eff419251735916"

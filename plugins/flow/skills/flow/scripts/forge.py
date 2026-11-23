@@ -547,6 +547,8 @@ def _bitbucket_merge_rows(repo: Path, origin: "ForgeOrigin", branch: str) -> Opt
 _WAIT_DEFAULT_TIMEOUT_S = 480   # 8 min: leaves margin under typical 10-min agent shell caps
 _WAIT_DEFAULT_INTERVAL_S = 15
 _FORGE_MERGE_TIMEOUT_S = 30
+_MERGE_CONFIRM_RETRIES = 3
+_MERGE_CONFIRM_INTERVAL_S = 2.0
 _FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _GH_FAILING = {"FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE", "ERROR"}
 _GL_PENDING_PIPELINES = {"created", "waiting_for_resource", "preparing", "pending", "running", "scheduled"}
@@ -711,26 +713,36 @@ def _bitbucket_wait_probe(repo: Path, origin: "ForgeOrigin", number: int) -> dic
     return _wait_row("ready", head, "build green and mergeable")
 
 
-def _github_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str) -> dict:
+def _github_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str, *,
+                  sleep: Any = None) -> dict:
     proc, err = _run_forge_cmd(
         ["gh", "pr", "merge", str(number), *_github_repo_args(origin), "--squash", "--match-head-commit", head],
         cwd=repo, timeout=_FORGE_MERGE_TIMEOUT_S)
     if proc is None:
         return _merge_row(False, "error", err)
     detail = _first_line(proc.stderr or proc.stdout, f"gh exit {proc.returncode}")
-    after, view_err = _github_pr_view(repo, origin, number, "state,headRefOid,mergeCommit,mergeQueueEntry")
-    if after is not None:
-        if str(after.get("state") or "").upper() == "MERGED" and _field(after, "mergeCommit", "oid"):
-            return _merge_row(True, "merged", "squash merged", merge_commit=after["mergeCommit"]["oid"])
-        if after.get("mergeQueueEntry") is not None:
-            return _merge_row(False, "queued", "added to merge queue")
-        if isinstance(after.get("headRefOid"), str) and after["headRefOid"] != head:
-            return _merge_row(False, "head_moved", f"head moved to {after['headRefOid']}")
+    attempts = 1 + _MERGE_CONFIRM_RETRIES if proc.returncode == 0 else 1
+    pause = time.sleep if sleep is None else sleep
+    view_err = ""
+    for attempt in range(attempts):
+        if attempt > 0:
+            pause(_MERGE_CONFIRM_INTERVAL_S)
+        after, view_err = _github_pr_view(repo, origin, number, "state,headRefOid,mergeCommit,mergeQueueEntry")
+        if after is not None:
+            if str(after.get("state") or "").upper() == "MERGED" and _field(after, "mergeCommit", "oid"):
+                return _merge_row(True, "merged", "squash merged", merge_commit=after["mergeCommit"]["oid"])
+            if after.get("mergeQueueEntry") is not None:
+                return _merge_row(False, "queued", "added to merge queue")
+            if isinstance(after.get("headRefOid"), str) and after["headRefOid"] != head:
+                return _merge_row(False, "head_moved", f"head moved to {after['headRefOid']}")
     low = detail.lower()
     if proc.returncode != 0:
         reason = "head_moved" if ("head" in low and ("match" in low or "modified" in low)) else "not_mergeable"
         return _merge_row(False, reason, detail)
-    return _merge_row(False, "error", view_err or "merge not confirmed by post-merge read")
+    msg = "merge command succeeded but could not be confirmed"
+    if view_err:
+        msg = f"{msg}: {view_err}"
+    return _merge_row(False, "unconfirmed", msg)
 
 
 def _gitlab_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str) -> dict:
@@ -931,7 +943,7 @@ def forge_wait(repo: Path, number: int, *, timeout_s: float = _WAIT_DEFAULT_TIME
         sleep(min(float(interval_s), remaining))
 
 
-def forge_merge(repo: Path, number: int, head: str) -> dict:
+def forge_merge(repo: Path, number: int, head: str, *, sleep: Any = None) -> dict:
     """One squash merge of PR/MR `number`, bound to full 40-hex commit `head`."""
     head_norm = (head or "").strip().lower()
     if not _FULL_SHA_RE.fullmatch(head_norm):
@@ -939,6 +951,8 @@ def forge_merge(repo: Path, number: int, head: str) -> dict:
     merge_fn, forge, origin = _forge_read(repo, "merge")
     if merge_fn is None:
         return _merge_row(False, "error", f"forge merge is unsupported on {forge}")
+    if sleep is not None and forge == "github":
+        return merge_fn(repo, origin, number, head_norm, sleep=sleep)
     return merge_fn(repo, origin, number, head_norm)
 
 

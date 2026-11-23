@@ -26,6 +26,7 @@ Merge only through `edge forge merge`, bound to the reviewed full 40-hex head SH
 - `merged_head_moved`: a commit nobody reviewed merged during the call; report both commits to the person at once, not as a clean success.
 - `head_moved`: stop merging and review the new head first.
 - `queued`: entered a merge queue; stop and report queued.
+- `unconfirmed`: the merge command succeeded but could not be confirmed; check the pull request's state and do not retry the merge.
 - `not_mergeable`, `invalid_head`, or `error`: stop and report the reason without retrying.
 
 ## After merge
