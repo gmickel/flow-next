@@ -150,7 +150,7 @@ class WireReadPointsAtTheReference(unittest.TestCase):
         out, _ = self._read(jr_cfg(idea_keys=["IDEAS", "RESEARCH"]), "IDEAS-7")
         self.assertIsInstance(out, dict)
         reference = Path(out["idea"]["reference"])
-        self.assertEqual(reference.name, "idea-intake.md")
+        self.assertEqual(reference.name, "tracker.md")
         self.assertTrue(reference.is_file(), reference)
 
     def test_missing_reference_is_named_under_the_plugin_root(self) -> None:
@@ -158,7 +158,7 @@ class WireReadPointsAtTheReference(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
                 JW, "IDEA_REFERENCE", Path(tmp) / "missing.md"):
             out, _ = self._read(jr_cfg(idea_keys=["IDEAS"]), "IDEAS-7")
-        self.assertEqual(out["idea"]["reference"], "references/idea-intake.md")
+        self.assertEqual(out["idea"]["reference"], "skills/flow/playbooks/tracker.md")
 
     def test_request_is_byte_identical_with_and_without_the_key(self) -> None:
         _, plain = self._read(jr_cfg(), "IDEAS-7")
