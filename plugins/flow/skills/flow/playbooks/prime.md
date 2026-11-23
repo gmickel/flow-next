@@ -15,7 +15,7 @@ Make one repository ready for agentic work. Prove each outcome by doing it rathe
 
 Ask first, in one batch and before any proof runs: the legacy and frozen areas, how specs are reviewed, and whether to add the Flow sentence. Read for a minute or two before asking, so the legacy question offers specific candidates with their evidence and the person confirms instead of recalling. If the checkout is behind its remote, say so in that batch and ask whether to update it.
 
-Leave the checkout as found: never pull, fast-forward, or switch the person's branch unasked. New files go on a new branch, uncommitted until the person says.
+Never pull, fast-forward, or reset the person's branch unasked. New files go on a new branch, uncommitted until the person says; say which branch the checkout is left on.
 
 Run independent proofs at the same time, and stop a proof that has stopped making progress instead of waiting on it. A proof that hangs, or needs access this session lacks, is reported as unproven with what was tried and its output; do not work around it at length.
 
