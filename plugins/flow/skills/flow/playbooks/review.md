@@ -6,7 +6,7 @@ Send review to another model family through `orchestrate.md`. If a named reviewe
 
 On the first round of a change review, use one reviewer when the change is small, stays in one area, and touches no shared state, concurrency, security, or data layout. Otherwise dispatch three reviewers in parallel, one lens each: **correctness**, **contracts**, and **integration**.
 
-Fill in the context header of `../reviewer-brief.md` (intent, out of scope, check results, mechanical commits to skip) and pass it with the commit range or spec path. Do not paste the diff; the reviewer reads the repository. After a review returns, verify the working tree is unchanged, since read-only is an instruction rather than tool enforcement.
+Fill in the context header of `reviewer-brief.md` beside the router (intent, out of scope, check results, mechanical commits to skip) and pass it with the commit range or spec path. Do not paste the diff; the reviewer reads the repository. After a review returns, verify the working tree is unchanged, since read-only is an instruction rather than tool enforcement.
 
 ## Fix loop
 
