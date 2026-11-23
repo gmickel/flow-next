@@ -12,4 +12,4 @@ An issue meets the bar when it fits one cohesive PR in an accepted kind—spec-l
 
 If it misses the bar (including non-build requests or goals), build nothing: post the closing questions on the issue, move it out of the ready state at once, and end as `ASKED` per `unattended.md`.
 
-If it meets the bar, write one linked spec via `spec.md`—or make a direct change with the issue as the request when small and local—and continue under `unattended.md`.
+If it meets the bar, write one linked spec via `spec.md`, a few lines when the change is small and local, and continue under `unattended.md`.

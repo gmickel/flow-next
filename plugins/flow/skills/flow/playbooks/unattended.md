@@ -6,6 +6,8 @@ Build, review, and open the PR without confirmation. Land it only when the invoc
 
 When a person is needed, post why on the issue or PR, move the item out of the tracker's ready state at once, and stop. On a transient failure, change nothing and end as `BLOCKED` so retrying is safe; keep no attempt counter.
 
+Name any worktree the run created in the final report.
+
 ## Terminal line
 
 End with exactly one fixed line parsed by outside tools:

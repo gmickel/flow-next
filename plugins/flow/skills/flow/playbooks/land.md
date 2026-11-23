@@ -30,4 +30,4 @@ Merge only through `edge forge merge`, bound to the reviewed full 40-hex head SH
 
 ## After merge
 
-Move any linked tracker issue to done with a short summary (`tracker.md`), and when unattended include `merged=<sha>` in the terminal line (`unattended.md`).
+Move any linked tracker issue to done with a short summary (`tracker.md`), and when unattended include `merged=<sha>` in the terminal line (`unattended.md`). Remove any worktree this work created once its PR is merged or closed.
