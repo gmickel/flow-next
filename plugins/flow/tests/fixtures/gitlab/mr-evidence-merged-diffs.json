@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "projects/flownext%2Fflownext/merge_requests/14/diffs?per_page=100&page=1"
+  ],
+  "env": {
+    "GITLAB_HOST": "localhost:8929"
+  },
+  "returncode": 0,
+  "stdout": "[{\"diff\":\"@@ -0,0 +1 @@\\n+fn317-ready\\n\",\"collapsed\":false,\"too_large\":false,\"new_path\":\"fn317/ready.txt\",\"old_path\":\"fn317/ready.txt\",\"a_mode\":\"0\",\"b_mode\":\"100644\",\"new_file\":true,\"renamed_file\":false,\"deleted_file\":false,\"generated_file\":false}]",
+  "stderr": "",
+  "recorded": "2026-11-05",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Ultimate trial)"
+}

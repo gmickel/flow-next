@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MR_IID="${1:?Usage: $0 MR_IID DISCUSSION_ID}"
+DISCUSSION_ID="${2:?Usage: $0 MR_IID DISCUSSION_ID}"
+
+glab api -X PUT "projects/:id/merge_requests/$MR_IID/discussions/$DISCUSSION_ID" -F resolved=true

@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "bkt",
+    "--context",
+    "flownextnew",
+    "api",
+    "/repositories/flownextnew/flownext/pullrequests/13/mergeability/checks"
+  ],
+  "env": {},
+  "returncode": 0,
+  "stdout": "{\"size\": 3, \"values\": [{\"type\": \"pullrequest_state_check\", \"status\": \"PASSED\", \"required\": true, \"blocking\": false, \"state\": \"OPEN\"}, {\"type\": \"current_user_permission_check\", \"status\": \"PASSED\", \"required\": true, \"blocking\": false}, {\"type\": \"git_mergeability_check\", \"status\": \"FAILED\", \"required\": true, \"blocking\": true, \"reason\": \"conflicts\", \"links\": {\"details\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/pullrequests/13/conflicts\"}}}]}",
+  "stderr": "",
+  "recorded": "2026-11-13",
+  "bkt": "0.38.1",
+  "server": "Bitbucket Cloud"
+}

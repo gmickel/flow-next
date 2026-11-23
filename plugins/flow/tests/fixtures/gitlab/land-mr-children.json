@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "-X",
+    "GET",
+    "projects/:id/merge_requests",
+    "-f",
+    "state=opened",
+    "-f",
+    "target_branch=fn317-fail"
+  ],
+  "env": {},
+  "returncode": 0,
+  "stdout": "[]",
+  "stderr": "",
+  "recorded": "2026-11-05",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Ultimate trial)"
+}

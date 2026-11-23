@@ -1,0 +1,318 @@
+"""Provider credential resolution (fn-139.2).
+
+flow-next implements **no keyring**. "Secure store" means whatever the host OS
+provides and the user has already exported into their environment - an earlier
+draft of this spec had a generic `env -> Keychain -> CLI config` ladder, which
+promised a cross-platform secret store that does not exist here.
+
+Resolution is per provider and by exact name, never a generic ladder.
+"""
+
+from __future__ import annotations
+
+import os
+import threading
+from typing import Callable, Optional
+
+
+class Credential:
+    """A resolved secret plus how to attach it. Never logged, never persisted."""
+
+    __slots__ = ("_apply",)
+
+    def __init__(self, apply: Callable[[dict[str, str]], None]) -> None:
+        self._apply = apply
+
+    def attach(self, headers: dict[str, str]) -> None:
+        self._apply(headers)
+
+    def __repr__(self) -> str:  # pragma: no cover - defensive
+        return "<Credential redacted>"
+
+
+def _glab_config_token(host: Optional[str] = None) -> Optional[str]:
+    """Read glab's stored token FOR A SPECIFIC HOST. Not a keyring - glab's config.
+
+    Host scoping is the point: taking the first token in the file would send a
+    self-managed instance's token to gitlab.com (or the reverse) whenever a user
+    has more than one authenticated host. Fails closed when no stanza matches.
+    """
+    import re
+
+    want = (host or "gitlab.com").lower()
+    for text in _glab_config_texts():
+        # hosts:\n    <host>:\n        token: <value>
+        m = re.search(
+            rf"^\s+{re.escape(want)}:\s*$(.*?)(?=^\s{{0,8}}\S+:\s*$|\Z)",
+            text, re.M | re.S,
+        )
+        if m:
+            tok = re.search(r"^\s+token:\s*(\S+)", m.group(1), re.M)
+            value = tok.group(1).strip("\"'") if tok else ""  # `token: ""` is empty too
+            if value:
+                return value
+            # A stanza without a token keeps it in the OS keyring (glab's default store);
+            # glab itself reads it back.
+            return _glab_cli_get("token", want) or None
+    return None
+
+
+def _glab_config_texts():
+    """glab's config files, `GLAB_CONFIG_DIR` first (glab reads only that
+    directory when it is set)."""
+    custom = os.environ.get("GLAB_CONFIG_DIR")
+    for candidate in (
+        *([os.path.join(custom, "config.yml")] if custom else []),
+        os.path.expanduser("~/.config/glab-cli/config.yml"),
+        os.path.expanduser("~/Library/Application Support/glab-cli/config.yml"),
+    ):
+        try:
+            with open(candidate, encoding="utf-8") as fh:
+                yield fh.read()
+        except OSError:
+            continue
+
+
+def _glab_config_hosts() -> list[str]:
+    """Every host glab's config has a stanza for."""
+    import re
+
+    hosts: list[str] = []
+    for text in _glab_config_texts():
+        block = re.search(r"^hosts:\s*$(.*?)(?=^\S|\Z)", text, re.M | re.S)
+        if not block:
+            continue
+        names = re.findall(r"^([ \t]+)(\S+):\s*$", block.group(1), re.M)
+        if names:
+            indent = min(len(lead) for lead, _ in names)
+            hosts += [name.strip("\"'") for lead, name in names if len(lead) == indent]
+    return hosts
+
+
+def _glab_cli_get(key: str, host: str) -> str:
+    """`glab config get <key> --host <host>`, or "" when glab is absent or fails."""
+    import subprocess
+
+    try:
+        proc = subprocess.run(["glab", "config", "get", key, "--host", host], capture_output=True,
+                              text=True, timeout=10, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    lines = proc.stdout.strip().splitlines() if proc.returncode == 0 else []
+    return lines[-1].strip() if lines else ""  # glab may print a config warning first
+
+
+def _basic(user: str, token: str) -> str:
+    import base64
+
+    encoded = base64.b64encode(f"{user}:{token}".encode()).decode()
+    _remember(encoded)
+    return "Basic " + encoded
+
+
+#: A secret store that would prompt in an unattended run must fail, not hang.
+TOKEN_COMMAND_TIMEOUT_S = 10
+
+#: One run per flowctl process: a sync makes many requests, the store is read once.
+_COMMAND_RESULTS: dict[tuple[str, ...], "str | TokenCommandError"] = {}
+_COMMAND_LOCK = threading.Lock()
+
+
+class TokenCommandError(RuntimeError):
+    """The configured token command gave no credential. Never carries its output."""
+
+
+def _command_token(argv, source=None) -> str:
+    """Run a token command (argv, no shell) and return its trimmed stdout.
+
+    `source` names a machine-local variable; its argv stays out of every message.
+    """
+    import subprocess
+
+    if not isinstance(argv, list) or not argv or not all(isinstance(a, str) and a for a in argv):
+        raise TokenCommandError("token command must be a non-empty list of strings")
+    key = tuple(argv)
+    # Concurrent requests (Linear's parallel dependency probes) wait for the one run.
+    with _COMMAND_LOCK:
+        if key not in _COMMAND_RESULTS:
+            try:
+                # Bytes, decoded only after the exit status is known: text mode
+                # raised on output that is not UTF-8 and echoed a byte of it.
+                proc = subprocess.run(argv, capture_output=True, check=False,
+                                      stdin=subprocess.DEVNULL, timeout=TOKEN_COMMAND_TIMEOUT_S)
+                try:
+                    token = proc.stdout.decode("utf-8").strip()
+                except UnicodeDecodeError:
+                    token = None
+                if proc.returncode != 0:
+                    outcome = TokenCommandError(f"token command exited {proc.returncode}")
+                elif token is None:
+                    outcome = TokenCommandError("token command printed output that is not UTF-8")
+                elif not token:
+                    outcome = TokenCommandError("token command printed an empty token")
+                elif "\n" in token:
+                    outcome = TokenCommandError("token command printed more than one line")
+                else:
+                    outcome = token
+            except FileNotFoundError:
+                outcome = TokenCommandError(f"token command from {source} not found" if source
+                                        else f"token command not found: {argv[0]}")
+            except subprocess.TimeoutExpired:
+                outcome = TokenCommandError(
+                    f"token command timed out after {TOKEN_COMMAND_TIMEOUT_S}s")
+            except OSError as exc:
+                outcome = TokenCommandError(f"token command could not run: {exc.strerror}")
+            _COMMAND_RESULTS[key] = outcome
+        outcome = _COMMAND_RESULTS[key]
+    if isinstance(outcome, TokenCommandError):
+        raise outcome
+    return outcome
+
+
+def machine_local_command(provider: str):
+    """`FLOW_TRACKER_TOKEN_COMMAND_<PROVIDER>`: an untracked JSON argv, or None when unset or empty.
+
+    Read before the tracked `tracker.perTracker.tokenCommand`, so a machine-specific path never
+    has to be committed. A malformed value raises without echoing it.
+    """
+    import json
+
+    name = f"FLOW_TRACKER_TOKEN_COMMAND_{provider.upper()}"
+    raw = os.environ.get(name)
+    if not raw:
+        return None
+    try:
+        argv = json.loads(raw)
+    except ValueError:
+        argv = None
+    if not isinstance(argv, list) or not argv or not all(isinstance(a, str) and a for a in argv):
+        raise TokenCommandError(f"{name} must be a JSON list of non-empty strings")
+    return argv
+
+
+def resolve(provider: str, *, auth_scheme: Optional[str] = None,
+            host: Optional[str] = None, token_command=None) -> Optional[Credential]:
+    """Return a Credential, or None when the transport authenticates itself.
+
+    GitHub and GitLab ordinarily go through their CLI, which carries its own
+    auth - so None there is correct, not a failure. Linear and Jira fall back
+    to a token command only when their environment variable is unset: the
+    machine-local one first, else the tracked `token_command`, never both.
+    """
+    def env_or_command(name: str) -> Optional[str]:
+        value = os.environ.get(name)
+        if not value:
+            local = machine_local_command(provider)
+            if local is not None:
+                value = _command_token(local, f"FLOW_TRACKER_TOKEN_COMMAND_{provider.upper()}")
+            elif token_command is not None:
+                value = _command_token(token_command)
+        return _remember(value)
+
+    if provider == "github":
+        tok = _remember(os.environ.get("GH_TOKEN"))
+        return Credential(lambda h: h.__setitem__("Authorization", f"Bearer {tok}")) if tok else None
+
+    if provider == "gitlab":
+        # Ordinary calls go through `glab`, which authenticates itself - but the
+        # upload route MUST use HTTP, and returning None there would send it
+        # unauthenticated. So fall back to glab's own stored token.
+        tok = _remember(os.environ.get("GITLAB_TOKEN"))
+        if tok:
+            return Credential(lambda h: h.__setitem__("PRIVATE-TOKEN", tok))
+        tok = _remember(_glab_config_token(host))
+        if not tok:
+            return None
+        # An OAuth login (glab auth login --web) is refused as PRIVATE-TOKEN; it goes as a bearer token.
+        if _glab_cli_get("is_oauth2", (host or "gitlab.com").lower()) == "true":
+            return Credential(lambda h: h.__setitem__("Authorization", f"Bearer {tok}"))
+        return Credential(lambda h: h.__setitem__("PRIVATE-TOKEN", tok))
+
+    if provider == "linear":
+        key = env_or_command("LINEAR_API_KEY")
+        return Credential(lambda h: h.__setitem__("Authorization", key)) if key else None
+
+    if provider == "jira":
+        # Selected by the PERSISTED authScheme rather than re-racing both sets
+        # every run: a site is Cloud or Data Center, and that does not change
+        # between invocations. Racing them would also make "which credential
+        # failed" unanswerable when both are present.
+        if auth_scheme == "bearer-pat":
+            pat = env_or_command("JIRA_PAT")
+            return Credential(lambda h: h.__setitem__("Authorization", f"Bearer {pat}")) if pat else None
+        email = os.environ.get("JIRA_EMAIL")
+        tok = env_or_command("JIRA_API_TOKEN") if email else None
+        if email and tok:
+            return Credential(lambda h: h.__setitem__("Authorization", _basic(email, tok)))
+        return None
+
+    return None
+
+
+#: Every secret this process has actually resolved, including ones that never
+#: appear in the environment. Scanning env vars alone missed the glab-config
+#: token used by the mandatory GitLab HTTP upload route, so a provider echoing
+#: it back would have leaked it.
+_SEEN: set[str] = set()
+
+
+#: Refuse, rather than exempt-from-redaction, a credential too short to redact
+#: safely. A round-7 length floor inside `redact()` was the wrong end of the
+#: problem: it let a 3-character token attach to a live request while being
+#: deliberately excluded from scrubbing, which breaks R6 outright. Rejecting at
+#: resolution keeps `redact()` floorless AND keeps a 1-2 char value from
+#: shredding every message it happens to appear inside. No provider here issues
+#: a credential this short, so nothing legitimate is refused.
+MIN_CREDENTIAL_LEN = 4
+
+
+class ShortCredential(ValueError):
+    """Resolved a credential too short to be real. Never carries the value."""
+
+
+def _remember(value: Optional[str]) -> Optional[str]:
+    if value and len(value) < MIN_CREDENTIAL_LEN:
+        raise ShortCredential(
+            f"resolved credential is shorter than {MIN_CREDENTIAL_LEN} characters; "
+            "refusing to use it (a value this short cannot be redacted from logs)"
+        )
+    if value:
+        _SEEN.add(value)
+    return value
+
+
+def remember_glab_token(host: Optional[str]) -> None:
+    """Register the token glab's own login holds for `host`, so `redact` strips
+    it from text a glab call returns. The CLI route never resolves it otherwise.
+    With no known host, every configured host's token: glab may have used any.
+    Never raises: the CLI route runs inside the executor's no-raise boundary."""
+    try:
+        hosts = [host] if host else [None, *_glab_config_hosts()]
+    except Exception:  # noqa: BLE001 - an unreadable config still leaves the default
+        hosts = [None]
+    for name in hosts:
+        try:
+            _remember(_glab_config_token(name))
+        except Exception:  # noqa: BLE001, S110 - a token too short to redact was never usable
+            pass
+
+
+def redact(text: str) -> str:
+    """Strip every known secret from a string bound for a log, error or receipt."""
+    out = text
+    # GITLAB_ACCESS_TOKEN and OAUTH_TOKEN: glab authenticates from them too.
+    for name in ("GH_TOKEN", "GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN",
+                 "CI_JOB_TOKEN", "LINEAR_API_KEY", "JIRA_API_TOKEN", "JIRA_PAT"):
+        val = os.environ.get(name)
+        # Same rule as `_remember`: a value this short is never a usable
+        # credential (resolution refuses it), and adding it here would let a
+        # stray `JIRA_PAT=p` rewrite every message containing the letter p.
+        if val and len(val) >= MIN_CREDENTIAL_LEN:
+            _SEEN.add(val)
+    # NO length floor. Everything in `_SEEN` was accepted by `_remember`, which
+    # refuses anything under MIN_CREDENTIAL_LEN - so "too short to redact" is
+    # handled by rejecting the credential, never by exempting it here.
+    for secret in sorted(_SEEN, key=len, reverse=True):
+        if secret:
+            out = out.replace(secret, "<redacted>")
+    return out
