@@ -13,11 +13,11 @@ Make one repository ready for agentic work. Prove each outcome by doing it rathe
 
 ## Order and bounds
 
-Ask first, in one batch and before any proof runs: the legacy and frozen areas, where specs go, and whether to add the Flow sentence. Spend a minute or two reading first, so the legacy question offers specific candidates with their evidence (files for older tools, a superseded setup, paths untouched for a long time, checks that only run by hand) and the person confirms instead of recalling; then the person can answer while the proofs run. If the checkout is behind its remote, say so in that batch and ask whether to update it.
+Ask first, in one batch and before any proof runs: the legacy and frozen areas, where specs go, and whether to add the Flow sentence. Read for a minute or two before asking, so the legacy question offers specific candidates with their evidence and the person confirms instead of recalling. If the checkout is behind its remote, say so in that batch and ask whether to update it.
 
 Leave the checkout as found: never pull, fast-forward, or switch the person's branch unasked. New files go on a new branch, uncommitted until the person says.
 
-Give each proof a deadline of a few minutes and run independent proofs at the same time. A proof that hangs, or needs access this session lacks (a container runtime, a login), is reported as unproven with what was tried and its output; do not work around it at length.
+Run independent proofs at the same time, and stop a proof that has stopped making progress instead of waiting on it. A proof that hangs, or needs access this session lacks, is reported as unproven with what was tried and its output; do not work around it at length.
 
 ## Acting and leaving behind
 
