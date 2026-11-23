@@ -26,8 +26,8 @@ from flowctl_tracker import executor as X  # noqa: E402
 from flowctl_tracker import lifecycle as L  # noqa: E402
 from flowctl_tracker import relate as R  # noqa: E402
 from flowctl_tracker import resolve_verb as RV  # noqa: E402
+from flowctl_tracker import spec_store as SS  # noqa: E402
 from flowctl_tracker import status as S  # noqa: E402
-from flowctl_tracker import syncbody as SB  # noqa: E402
 from flowctl_tracker import wire as W  # noqa: E402
 from flowctl_tracker.types import (  # noqa: E402
     ErrorClass, MAX_RETRIES, Request, Response, TrackerError,
@@ -186,22 +186,25 @@ def _write_flow(flow: Path, config: dict, *, spec_id: str = "fn-1-demo",
     (flow / "config.json").write_text(json.dumps(config), encoding="utf-8")
     base = {
         "id": GH_NODE, "identifier": "#42", "url": "https://x/42",
-        "lastSyncedAt": None, "depRelations": [], "linkState": "linked",
-        "baseHashFlow": None, "baseHashTracker": None,
-        "mergeBaseFlow": None, "mergeBaseTracker": None,
     }
-    if tracker:
+    if tracker is not None:
         base.update(tracker)
-    path = flow / "specs" / f"{spec_id}.json"
-    path.write_text(json.dumps({
-        "id": spec_id, "title": "Demo", "status": "open",
-        "branch_name": spec_id, "tracker": base,
-    }, indent=2) + "\n", encoding="utf-8")
+    lines = ["---", f"id: {spec_id}", "title: Demo"]
+    if any(base.get(k) for k in ("id", "identifier", "url", "snapshot")):
+        lines.append("tracker:")
+        for k in ("id", "identifier", "url", "snapshot"):
+            if base.get(k):
+                lines.append(f"  {k}: {json.dumps(str(base[k]))}")
+    lines.extend(["---", ""])
+    path = flow / "specs" / f"{spec_id}.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
     return path
 
 
 def _saved(flow: Path, spec_id: str = "fn-1-demo") -> dict:
-    return json.loads((flow / "specs" / f"{spec_id}.json").read_text(encoding="utf-8"))
+    loaded = SS.load_spec_doc(flow / "specs" / f"{spec_id}.md", spec_id=spec_id)
+    assert not isinstance(loaded, TrackerError), loaded
+    return loaded[0]
 
 
 def sha(text: str) -> str:
@@ -864,10 +867,9 @@ class SpecVerbCreateAllFour(unittest.TestCase):
                 self.assertEqual(out["id"], durable)
                 self.assertEqual(out["identifier"], display)
                 self.assertEqual(out["linkState"], "linked")
-                saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+                saved = _saved(flow)["tracker"]
                 self.assertEqual(saved["id"], durable)
                 self.assertEqual(saved["identifier"], display)
-                self.assertEqual(len(_receipts(flow)), 1)
 
 
 class SpecVerbCreateFirstAllFour(unittest.TestCase):
@@ -918,7 +920,7 @@ class SpecVerbPersistExternalAllFour(unittest.TestCase):
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["id"], LN_UUID)
             self.assertEqual(out["linkState"], "linked")
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            saved = _saved(flow)["tracker"]
             self.assertEqual(saved["id"], LN_UUID)
 
     def test_non_linear_providers_refuse_before_any_request(self) -> None:
@@ -1002,40 +1004,26 @@ class SpecVerbStatusAllFour(unittest.TestCase):
             with self.subTest(provider=provider), \
                     tempfile.TemporaryDirectory() as tmp:
                 flow = Path(tmp)
-                path = _write_flow(flow, cfg, tracker={
+                _write_flow(flow, cfg, tracker={
                     "id": durable, "identifier": display, "url": "https://x",
-                    "lastSyncedAt": None, "depRelations": [],
-                    "linkState": "linked",
                 })
-                tdir = flow / "tasks"
-                tdir.mkdir(parents=True, exist_ok=True)
-                (tdir / "fn-1-demo.1.json").write_text(json.dumps({
-                    "id": "fn-1-demo.1", "status": "in_progress",
-                    "spec": "fn-1-demo"}), encoding="utf-8")
                 ex = fake_execute(responses)
                 out = S.status(flow, "fn-1-demo", to="in_progress",
-                               execute=ex)
+                               branch="fn-1-demo", execute=ex)
                 self.assertNotIsInstance(out, TrackerError,
                                          f"{provider}: {out}")
                 self.assertEqual(out["kind"], "applied", f"{provider}: {out}")
-                saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-                self.assertIsNotNone(saved["lastSyncedAt"],
-                                     f"{provider}: lastSyncedAt must advance")
-                self.assertEqual(len(_receipts(flow)), 1, provider)
 
 
 class SpecVerbRelateAllFour(unittest.TestCase):
-    """relate --blocked-by: applied + ledger key persisted on all four
+    """relate --blocked-by: applied on all four
     (provider-specific degraded forms are part of the contract)."""
 
     def _write_pair(self, flow: Path, cfg: dict, a_tr: dict, b_tr: dict) -> None:
         (flow / "specs").mkdir(parents=True, exist_ok=True)
         (flow / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
         for sid, tr in (("fn-1-demo", a_tr), ("fn-2-dep", b_tr)):
-            (flow / "specs" / f"{sid}.json").write_text(json.dumps({
-                "id": sid, "title": sid, "status": "open",
-                "branch_name": sid, "tracker": tr,
-            }, indent=2) + "\n", encoding="utf-8")
+            _write_flow(flow, cfg, spec_id=sid, tracker=tr)
 
     def test_relate_applied_all_four(self) -> None:
         ln_b = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
@@ -1097,13 +1085,6 @@ class SpecVerbRelateAllFour(unittest.TestCase):
                 self.assertEqual(len(out["key"]), 16)
                 if form is not None:
                     self.assertEqual(out["form"], form, provider)
-                saved = json.loads(
-                    (flow / "specs" / "fn-1-demo.json").read_text(
-                        encoding="utf-8"))["tracker"]
-                self.assertTrue(
-                    any(r.get("key") == out["key"]
-                        for r in saved["depRelations"] if isinstance(r, dict)),
-                    f"{provider}: ledger must persist the edge key")
 
 
     def test_github_second_parent_is_queued_not_fatal(self) -> None:
@@ -1112,7 +1093,7 @@ class SpecVerbRelateAllFour(unittest.TestCase):
         claim, instead of failing the facade."""
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp)
-            base = {"url": "u", "depRelations": [], "linkState": "linked"}
+            base = {"url": "u"}
             self._write_pair(flow, gh_cfg(),
                              {**base, "id": GH_NODE, "identifier": "#42"},
                              {**base, "id": "I_kwDOTestNode2", "identifier": "#43"})
@@ -1131,54 +1112,6 @@ class SpecVerbRelateAllFour(unittest.TestCase):
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertEqual(out["kind"], "queued")
             self.assertEqual(out["reason"], "github_single_parent")
-            saved = json.loads((flow / "specs" / "fn-1-demo.json").read_text(
-                encoding="utf-8"))["tracker"]
-            self.assertFalse(
-                any(isinstance(r, dict) and r.get("status") == "pending"
-                    for r in saved.get("depRelations") or []),
-                "the claim is released, so nothing reads as an interrupted create")
-            sink = flow / "review-deferred" / "tracker-relate.md"
-            self.assertIn("only one parent", sink.read_text(encoding="utf-8"))
-
-class SpecVerbSyncBodyAllFour(unittest.TestCase):
-    """sync-body push: pushed + paired merge base committed on all four."""
-
-    def test_push_all_four(self) -> None:
-        for provider, cfg_fn, durable, display, parent_resp, mk in PROVIDERS:
-            with self.subTest(provider=provider), \
-                    tempfile.TemporaryDirectory() as tmp:
-                flow = Path(tmp)
-                _write_flow(flow, cfg_fn(), tracker={
-                    "id": durable, "identifier": display, "url": "https://x",
-                    "lastSyncedAt": None, "depRelations": [],
-                    "linkState": "linked",
-                    "mergeBaseFlow": None, "mergeBaseTracker": None,
-                    "baseHashFlow": None, "baseHashTracker": None,
-                })
-                update_resp = (
-                    ok({"data": {"issueUpdate": {
-                        "success": True, "issue": mk("NEW FLOW\n")}}})
-                    if provider == "linear"
-                    else (empty() if provider == "jira"
-                          else parent_resp("NEW FLOW\n"))
-                )
-                ex = fake_execute({
-                    "sync-body-parent-read": parent_resp("old remote"),
-                    "wire-parent-read": parent_resp("old remote"),
-                    "wire-update": update_resp,
-                    "wire-read": parent_resp("NEW FLOW\n"),
-                })
-                out = SB.sync_body(flow, "fn-1-demo",
-                                   flow_file_body="NEW FLOW\n",
-                                   direction="push", execute=ex)
-                self.assertNotIsInstance(out, TrackerError,
-                                         f"{provider}: {out}")
-                self.assertEqual(out["kind"], "pushed", f"{provider}: {out}")
-                saved = _saved(flow)["tracker"]
-                self.assertEqual(saved["mergeBaseFlow"], "NEW FLOW\n")
-                self.assertIsNotNone(saved["mergeBaseTracker"], provider)
-                self.assertEqual(saved["baseHashFlow"], sha("NEW FLOW\n"))
-                self.assertIsNotNone(saved["lastSyncedAt"], provider)
 
 
 # ---------------------------------------------------------------------------
@@ -1277,55 +1210,6 @@ class PreCreateWindowOpen(unittest.TestCase):
                              "stale claim is reclaimed and a second issue is "
                              "created (does not assert closed)")
             self.assertFalse(out["retried"])
-
-
-class PostWriteReadbackFailureAllFour(unittest.TestCase):
-    """sync-body push: wire-read fails after update -> prior merge base intact."""
-
-    def test_readback_failure_across_all_four(self) -> None:
-        prior_flow = "PRIOR FLOW\n"
-        prior_tracker = "PRIOR TRACKER"
-        for provider, cfg_fn, durable, display, parent_resp, _mk in PROVIDERS:
-            with self.subTest(provider=provider), tempfile.TemporaryDirectory() as tmp:
-                flow = Path(tmp)
-                _write_flow(
-                    flow, cfg_fn(),
-                    tracker={
-                        "id": durable, "identifier": display, "url": "https://x",
-                        "lastSyncedAt": "OLD", "depRelations": [],
-                        "linkState": "linked",
-                        "mergeBaseFlow": prior_flow,
-                        "mergeBaseTracker": prior_tracker,
-                        "baseHashFlow": sha(prior_flow),
-                        "baseHashTracker": sha(prior_tracker),
-                    })
-                update_resp = (
-                    ok({"data": {"issueUpdate": {
-                        "success": True, "issue": _ln_issue("written")}}})
-                    if provider == "linear"
-                    else (empty() if provider == "jira"
-                          else parent_resp("written"))
-                )
-                ex = fake_execute({
-                    "sync-body-parent-read": parent_resp("old remote"),
-                    "wire-parent-read": parent_resp("old remote"),
-                    "wire-update": update_resp,
-                    "wire-read": TrackerError(ErrorClass.TRANSPORT,
-                                              "readback boom",
-                                              subtype="readback"),
-                })
-                out = SB.sync_body(
-                    flow, "fn-1-demo", flow_file_body="NEW FLOW\n",
-                    direction="push", execute=ex)
-                self.assertIsInstance(out, TrackerError)
-                self.assertEqual(out.details.get("completed_steps"),
-                                 ["wire-update"])
-                saved = _saved(flow)["tracker"]
-                self.assertEqual(saved["mergeBaseFlow"], prior_flow)
-                self.assertEqual(saved["mergeBaseTracker"], prior_tracker)
-                self.assertEqual(saved["baseHashFlow"], sha(prior_flow))
-                self.assertEqual(saved["baseHashTracker"], sha(prior_tracker))
-                self.assertEqual(saved["lastSyncedAt"], "OLD")
 
 
 class ScopedInvalidationViaResolveVerb(unittest.TestCase):
@@ -1667,7 +1551,7 @@ class JiraDcCustomKey(unittest.TestCase):
             out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["identifier"], DC_KEY)
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            saved = _saved(flow)["tracker"]
             self.assertEqual(saved["identifier"], DC_KEY)
             self.assertEqual(saved["id"], DC_ID)
 

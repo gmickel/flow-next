@@ -18,7 +18,6 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from flowctl_tracker import credentials as CR  # noqa: E402
 from flowctl_tracker import resolve_verb as RV  # noqa: E402
-from flowctl_tracker.facade import helpers as H  # noqa: E402
 from flowctl_tracker.types import ErrorClass, Request, TrackerError  # noqa: E402
 
 CRED_VARS = ("JIRA_API_TOKEN", "JIRA_PAT", "LINEAR_API_KEY",
@@ -193,11 +192,6 @@ class TokenCommand(unittest.TestCase):
         code = "import sys; sys.stdout.buffer.write(b'\\xff'); sys.exit(3)"
         self.assert_auth_failure(py(code), "exited 3")
 
-    def test_linear_with_a_token_command_is_not_on_the_mcp_rung(self) -> None:
-        argv, _log = self.counted("mcp-check-3333")
-        config = {"tracker": {"type": "linear", "perTracker": {"tokenCommand": argv}}}
-        self.assertFalse(H.on_mcp_rung(config))
-
 
 class MachineLocalTokenCommand(unittest.TestCase):
     """fn-332: FLOW_TRACKER_TOKEN_COMMAND_<TRACKER> comes before the tracked tokenCommand."""
@@ -286,11 +280,6 @@ class MachineLocalTokenCommand(unittest.TestCase):
             for _ in range(3):
                 self.send("linear", {}, self.LINEAR)
         self.assertEqual(log.read_text().count("run") if log.exists() else 0, 1)
-
-    def test_linear_with_a_local_command_is_not_on_the_mcp_rung(self) -> None:
-        local, _ = self.counted("local-mcp-1616")
-        with self.local("LINEAR", local):
-            self.assertFalse(H.on_mcp_rung({"tracker": {"type": "linear", "perTracker": {}}}))
 
 
 if __name__ == "__main__":

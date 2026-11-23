@@ -62,11 +62,11 @@ def _unset_ready(cfg: dict) -> dict:
 def _flow_with_link(tmp: str, durable: str) -> Path:
     flow = Path(tmp)
     (flow / "specs").mkdir()
-    (flow / "specs" / "fn-1-linked.json").write_text(json.dumps(
-        {"id": "fn-1-linked", "tracker": {"id": durable, "identifier": "x"}}),
+    (flow / "specs" / "fn-1-linked.md").write_text(
+        f"---\nid: fn-1-linked\ntitle: Linked\ntracker:\n  id: {json.dumps(durable)}\n  identifier: \"x\"\n---\n",
         encoding="utf-8")
-    (flow / "specs" / "fn-2-unlinked.json").write_text(json.dumps(
-        {"id": "fn-2-unlinked", "tracker": {"id": None}}), encoding="utf-8")
+    (flow / "specs" / "fn-2-unlinked.md").write_text(
+        "---\nid: fn-2-unlinked\ntitle: Unlinked\n---\n", encoding="utf-8")
     return flow
 
 
@@ -239,7 +239,7 @@ class UnlinkedTests(unittest.TestCase):
 
 
 class DefaultOutputTests(unittest.TestCase):
-    def test_no_flags_keeps_full_rows(self) -> None:
+    def test_no_flags_returns_compact_rows(self) -> None:
         for provider, cfg_fn, response, _first, _second in CASES:
             with self.subTest(provider=provider), \
                     tempfile.TemporaryDirectory() as tmp:
@@ -247,38 +247,34 @@ class DefaultOutputTests(unittest.TestCase):
                 ex = fake_execute({"wire-list-open": response})
                 out = W.dispatch("list-open", cfg_fn(), execute=ex,
                                  flow_dir=flow)
-                mod = W._PROVIDERS[provider]
-                ex2 = fake_execute({"wire-list-open": response})
-                self.assertEqual(out, mod.list_open(cfg_fn(), ex2))
                 self.assertEqual(len(out["issues"]), 2)
-                self.assertIn("raw", out["issues"][0])
-                self.assertIn("body", out["issues"][0])
-                self.assertNotIn("excerpt", out["issues"][0])
+                self.assertEqual(set(out["issues"][0]), COMPACT_KEYS)
+                self.assertEqual(out["issues"][0]["excerpt"], "B")
+                self.assertEqual(out["issues"][1]["excerpt"], "x" * 500)
+                self.assertNotIn("raw", out["issues"][0])
+                self.assertNotIn("body", out["issues"][0])
 
-    def test_linear_default_query_is_the_9_10_0_query(self) -> None:
+    def test_linear_default_query_selects_labels_for_compact_rows(self) -> None:
         ex = fake_execute({"wire-list-open": ok(
             {"data": {"issues": {"nodes": LN_TWO}}})})
         W.dispatch("list-open", ln_cfg(), execute=ex)
-        self.assertEqual(
-            json.loads(ex.calls[0].body)["query"],
-            "query($filter: IssueFilter!, $after: String) { "
-            "issues(first: 100, filter: $filter, after: $after) "
-            "{ nodes { id identifier title description url } "
-            "pageInfo { hasNextPage endCursor } } }")
+        self.assertIn("labels { nodes { name } }",
+                      json.loads(ex.calls[0].body)["query"])
 
 
 class BacklogTrackerOnlySetTests(unittest.TestCase):
     """R5: the tracker-only set from `--unlinked` equals the prose de-dup."""
 
     def test_unlinked_equals_the_prose_dedup_on_a_fixture_backlog(self) -> None:
+        from flowctl_tracker import spec_store  # noqa: PLC0415
         for provider, cfg_fn, response, first, _second in CASES:
             with self.subTest(provider=provider), \
                     tempfile.TemporaryDirectory() as tmp:
                 flow = _flow_with_link(tmp, first)
                 full = W.dispatch("list-open", cfg_fn(),
                                   execute=fake_execute({"wire-list-open": response}))
-                linked = {json.loads(p.read_text())["tracker"].get("id")
-                          for p in (flow / "specs").glob("*.json")}
+                linked = {tr.get("id") for _sid, tr in spec_store.iter_spec_trackers(flow)
+                          if tr.get("id")}
                 prose = [r["identifier"] for r in full["issues"]
                          if r["id"] not in linked]
                 new = W.dispatch("list-open", cfg_fn(), unlinked=True,
@@ -286,50 +282,15 @@ class BacklogTrackerOnlySetTests(unittest.TestCase):
                                  execute=fake_execute({"wire-list-open": response}))
                 self.assertEqual([r["identifier"] for r in new["issues"]], prose)
 
-    def test_backlog_mode_reads_unlinked(self) -> None:
-        text = (ROOT / "skills/flow-next-flow/references/backlog-mode.md"
-                ).read_text(encoding="utf-8")
-        self.assertIn("$FLOWCTL tracker wire list-open --unlinked --json", text)
-        self.assertNotIn("$FLOWCTL tracker wire list-open --json", text)
-
-
-class IntakeRouteContractTests(unittest.TestCase):
-    """R6: one route row, one reference with one table and one question."""
-
-    REFS = ROOT / "skills/flow-next-flow/references"
-
-    def test_route_row_points_at_the_intake_reference(self) -> None:
-        rows = [line for line in (self.REFS / "route-matrix-more.md")
-                .read_text(encoding="utf-8").splitlines()
-                if "open-issue-intake.md" in line]
-        self.assertEqual(len(rows), 1)
-
-    def test_reference_reads_unlinked_and_shows_one_table_one_question(self) -> None:
-        text = (self.REFS / "open-issue-intake.md").read_text(encoding="utf-8")
-        self.assertIn('"$FLOWCTL" tracker wire list-open --any-lane --unlinked --json', text)
-        separators = [line for line in text.splitlines()
-                      if line.startswith("|---|")]
-        self.assertEqual(len(separators), 1, "exactly one table")
-        for action in ("new spec", "fold into", "dependency", "leave"):
-            self.assertIn(f"`{action}", text)
-        for stage in ("flow-next:flow-next-capture", "spec add-dep",
-                      "flow-next:flow-next-tracker-sync push"):
-            self.assertIn(stage, text)
-
-    def test_picked_rows_read_the_full_issue(self) -> None:
-        text = (self.REFS / "open-issue-intake.md").read_text(encoding="utf-8")
-        for token in ("tracker wire read", "tracker wire comment-list"):
-            self.assertIn(token, text)
-
 
 class CliFlagTests(unittest.TestCase):
     def test_cli_accepts_both_flags(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            subprocess.run([sys.executable, str(ROOT / "scripts/flowctl.py"),
-                            "init", "--json"], cwd=tmp, check=True,
-                           capture_output=True)
+            flow = Path(tmp) / ".flow"
+            flow.mkdir()
+            (flow / "config.json").write_text("{}", encoding="utf-8")
             proc = subprocess.run(
-                [sys.executable, str(ROOT / "scripts/flowctl.py"), "tracker",
+                [sys.executable, str(ROOT / "scripts/edge.py"), "tracker",
                  "wire", "list-open", "--any-lane", "--unlinked", "--json"],
                 cwd=tmp, capture_output=True, text=True)
             self.assertNotIn("unrecognized arguments", proc.stderr)

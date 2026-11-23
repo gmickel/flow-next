@@ -13,8 +13,7 @@ from pathlib import Path
 from test_make_pr_gitlab import GitLabShellCase, answers, recorded
 
 TESTS = Path(__file__).resolve().parent
-SKILL = TESTS.parent / "skills" / "flow-next-resolve-pr"
-SCRIPTS = SKILL / "scripts"
+SCRIPTS = TESTS.parent / "scripts" / "resolve-pr"
 FIXED = "8ec02af31f716aa23cf68c2adb7ea5c3c1e251e0"   # the f-string thread, fixed in 900c162
 
 
@@ -125,76 +124,6 @@ class ReplyAndResolveTests(MrDiscussionCase):
         resolve = self.run_sh(["bash", str(SCRIPTS / "resolve-mr-discussion"), "13", "0" * 40],
                               GLAB_ANSWERS=answers(recorded("mr-discussion-resolve")))
         self.assertNotEqual(resolve.returncode, 0)
-
-
-class ReferenceCommandTests(MrDiscussionCase):
-    """Every glab command forge-gitlab.md gives the agent replays a live recording."""
-
-    REFERENCE = re.sub(r"\s*\n\s*", " ", (SKILL / "forge-gitlab.md").read_text(encoding="utf-8"))
-    RECORDINGS = ("mr-view-branch", "project-read", "mr-review-read", "fork-project-read", "mr-note-create")
-
-    def run_command(self, command):
-        body = json.loads(recorded("mr-note-create").read_text(encoding="utf-8"))["argv"][-1].removeprefix("body=")
-        return self.run_sh(["bash", "-c", f"set -o pipefail; {command}"], PR_NUMBER="13", SOURCE_PROJECT_ID="2",
-                           REPLY=body, GLAB_ANSWERS=answers(*map(recorded, self.RECORDINGS)))
-
-    def test_every_glab_command_is_recorded(self):
-        commands = re.findall(r"`(glab (?:api|mr) [^`]+)`", self.REFERENCE)
-        self.assertEqual(len(commands), 5, commands)
-        for command in commands:
-            with self.subTest(command):
-                result = self.run_command(command)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertTrue(result.stdout.strip())
-
-    def test_the_answers_the_reference_reads(self):
-        reads = {c: self.run_command(c).stdout.strip() for c in re.findall(r"`(glab (?:api|mr) [^`]+)`", self.REFERENCE)}
-        self.assertEqual(reads['glab mr view --output json | jq -r .iid'], "13")
-        self.assertEqual(reads['glab api "projects/$SOURCE_PROJECT_ID" | jq -r .http_url_to_repo'],
-                         "http://localhost:8929/root/flownext-fork.git")
-        # The merge request URL check: this project's own URL matches, another project's does not.
-        web_url = reads['glab api "projects/:id" | jq -r .web_url']
-        mr_url = json.loads(json.loads(recorded("mr-review-read").read_text(encoding="utf-8"))["stdout"])["web_url"]
-        self.assertEqual(mr_url.split("/-/merge_requests/")[0].lower(), web_url.lower())
-        self.assertNotEqual("http://localhost:8929/root/flownext-fork", web_url.lower())
-        # A top-level reply is a new note, never a reply inside the note's discussion, which
-        # turns the note into an unresolved thread (measured).
-        note = reads['glab api -X POST "projects/:id/merge_requests/$PR_NUMBER/notes" -f "body=$REPLY"']
-        self.assertIs(json.loads(note)["resolvable"], False)
-
-
-class ForgePickTests(MrDiscussionCase):
-    """workflow.md's Preamble reads the forge from flowctl and stays on GitHub when it cannot."""
-
-    LINES = "\n".join(l for l in (SKILL / "workflow.md").read_text(encoding="utf-8").splitlines()
-                      if l.startswith("FORGE="))
-
-    def pick(self, flowctl_body):
-        flowctl = self.tmp / "flowctl"
-        flowctl.write_text(f"#!/bin/sh\n{flowctl_body}\n", encoding="utf-8")
-        flowctl.chmod(0o755)
-        result = self.run_sh(["bash", "-c", f'set -e\nFLOWCTL={flowctl}\n{self.LINES}\nprintf %s "$FORGE"'])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        return result.stdout
-
-    def test_forge_pick(self):
-        self.assertEqual(self.LINES.count("FORGE="), 2, "the Preamble's two forge lines")
-        for name, body, forge in (
-            ("gitlab origin", "echo '{\"forge\": \"gitlab\"}'", "gitlab"),
-            ("github origin", "echo '{\"forge\": \"github\"}'", "github"),
-            ("unknown host", "echo '{\"forge\": null}'", "github"),
-            ("snapshot fails", "echo 'no .flow' >&2; exit 1", "github"),
-            ("snapshot not JSON", "echo 'not json'", "github"),
-        ):
-            with self.subTest(name):
-                self.assertEqual(self.pick(body), forge)
-
-    def test_crlf_jq_output(self):
-        """Windows jq.exe ends its output with CRLF; the CR never reaches FORGE."""
-        jq = subprocess.run(["sh", "-c", "command -v jq"], capture_output=True, text=True, check=True).stdout.strip()
-        (self.bin / "jq").unlink()
-        self.stub("jq", f"#!/bin/sh\n{jq} \"$@\" | sed 's/$/\\r/'\n")
-        self.assertEqual(self.pick("echo '{\"forge\": \"gitlab\"}'"), "gitlab")
 
 
 if __name__ == "__main__":

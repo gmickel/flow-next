@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from flowctl_tracker import lifecycle as L  # noqa: E402
-from flowctl_tracker import syncbody as SB  # noqa: E402
+from flowctl_tracker import spec_store as SS  # noqa: E402
 from flowctl_tracker.types import ErrorClass, Response, TrackerError  # noqa: E402
 
 
@@ -79,14 +79,40 @@ def _write_flow(flow: Path, config: dict, *, spec_id: str = "fn-1-demo",
                 tracker: dict | None = None) -> Path:
     (flow / "specs").mkdir(parents=True, exist_ok=True)
     (flow / "config.json").write_text(json.dumps(config), encoding="utf-8")
-    spec = {"id": spec_id, "title": "Demo",
-            "tracker": tracker if tracker is not None else {
-                "id": None, "identifier": None, "url": None,
-                "lastSyncedAt": None, "depRelations": [],
-            }}
-    path = flow / "specs" / f"{spec_id}.json"
-    path.write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+    lines = ["---", f"id: {spec_id}", "title: Demo"]
+    if tracker and any(tracker.get(k) for k in ("id", "identifier", "url", "snapshot")):
+        lines.append("tracker:")
+        for k in ("id", "identifier", "url", "snapshot"):
+            if tracker.get(k):
+                lines.append(f"  {k}: {json.dumps(str(tracker[k]))}")
+    lines.extend(["---", ""])
+    path = flow / "specs" / f"{spec_id}.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def _saved_doc(path: Path) -> dict:
+    loaded = SS.load_spec_doc(path)
+    assert not isinstance(loaded, TrackerError), loaded
+    return loaded[0]
+
+
+def _saved_tracker(path: Path) -> dict:
+    return L.helpers.merged_tracker(_saved_doc(path))
+
+
+def _rewrite_spec(path: Path, *, title: str | None = None,
+                  tracker: dict | None = None) -> None:
+    doc = _saved_doc(path)
+    lines = ["---", f"id: {doc['id']}", f"title: {json.dumps(title or doc.get('title') or 'Demo')}"]
+    tr = tracker if tracker is not None else (doc.get("tracker") or {})
+    if tr and any(tr.get(k) for k in ("id", "identifier", "url", "snapshot")):
+        lines.append("tracker:")
+        for k in ("id", "identifier", "url", "snapshot"):
+            if tr.get(k):
+                lines.append(f"  {k}: {json.dumps(str(tr[k]))}")
+    lines.extend(["---", ""])
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _receipts(flow: Path) -> list[dict]:
@@ -148,53 +174,6 @@ class LinkStateMigration(unittest.TestCase):
         self.assertEqual(got, "uuid-1")
 
 
-class CreateReceiptSemantics(unittest.TestCase):
-    def test_create_writes_receipt_create_first_does_not(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            flow = Path(tmp) / ".flow"
-            _write_flow(flow, gh_cfg())
-            ex = fake_execute({
-                "lifecycle-create": ok({
-                    "id": 1, "node_id": GH_NODE, "number": 42,
-                    "html_url": "https://github.com/o/r/issues/42",
-                    "body": "stored\n\n",
-                }),
-                "sync-body-parent-read": _readback("github", "stored\n\n"),
-            })
-            out = L.create(flow, "fn-1-demo", title="T", body="B",
-                           event="work.firstClaim", execute=ex)
-            self.assertNotIsInstance(out, TrackerError)
-            saved = json.loads(
-                (flow / "specs" / "fn-1-demo.json").read_text())["tracker"]
-            self.assertEqual(saved["mergeBaseFlow"], "B")
-            self.assertEqual(
-                saved["mergeBaseTracker"],
-                SB.trackerBodyForMerge("stored\n\n"))
-            self.assertIsNotNone(saved["lastSyncedAt"])
-            receipts = _receipts(flow)
-            self.assertEqual(len(receipts), 1)
-            self.assertEqual(receipts[0]["type"], "sync")
-            self.assertEqual(receipts[0]["status"], "pushed")
-            self.assertEqual(receipts[0]["event"], "work.firstClaim")
-            self.assertEqual(receipts[0]["tracker_id"], GH_NODE)
-            self.assertNotIn("receipts", str(flow / "sync-runs"))
-
-            # create-first: fresh flow, no receipt
-            flow2 = Path(tmp) / "cf" / ".flow"
-            flow2.mkdir(parents=True)
-            (flow2 / "config.json").write_text(json.dumps(gh_cfg()), encoding="utf-8")
-            key = L.compute_create_first_key("github", "T2", "B2")
-            ex2 = fake_execute({"lifecycle-create": ok({
-                "id": 2, "node_id": "I_other", "number": 7,
-                "html_url": "https://github.com/o/r/issues/7",
-            })})
-            out2 = L.create_first(flow2, title="T2", body="B2",
-                                  retry_key=key, execute=ex2)
-            self.assertNotIsInstance(out2, TrackerError)
-            self.assertEqual(_receipts(flow2), [])
-            self.assertTrue((flow2 / "create-first" / f"{key}.json").is_file())
-
-
 class CreateFirstRetry(unittest.TestCase):
     def test_retry_returns_recorded_issue_with_no_second_create(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -234,12 +213,9 @@ class PersistExternal(unittest.TestCase):
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["id"], LN_UUID)
             self.assertEqual(out["linkState"], "linked")
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            saved = _saved_tracker(path)
             self.assertEqual(saved["id"], LN_UUID)
             self.assertEqual(saved["linkState"], "linked")
-            receipts = _receipts(flow)
-            self.assertEqual(len(receipts), 1)
-            self.assertEqual(receipts[0]["tracker_id"], LN_UUID)
 
     def test_graphql_down_persists_identifier_only_plus_warning_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -255,20 +231,13 @@ class PersistExternal(unittest.TestCase):
             self.assertNotIsInstance(out, TrackerError)
             self.assertIsNone(out["id"])
             self.assertEqual(out["linkState"], "identifier_only")
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            saved = _saved_tracker(path)
             self.assertIsNone(saved["id"])
             self.assertEqual(saved["identifier"], "WOR-17")
             self.assertEqual(saved["linkState"], "identifier_only")
             # Must NOT migrate as unlinked
             self.assertEqual(L.derive_link_state(saved), "identifier_only")
-            receipts = _receipts(flow)
-            self.assertEqual(len(receipts), 1)
-            # Epic contract: degradation is EXCLUSIVELY the structured field -
-            # the note never carries a degradation sentence.
-            note = receipts[0]["note"] or ""
-            self.assertNotIn("identifier_only", note)
-            self.assertNotIn("degraded", note.lower())
-            degraded = receipts[0].get("degraded") or {}
+            degraded = out.get("degraded") or {}
             self.assertEqual(degraded.get("kind"), "identifier_only")
             self.assertEqual(degraded.get("identifier"), "WOR-17")
             self.assertEqual(degraded.get("url"),
@@ -288,15 +257,11 @@ class PersistExternal(unittest.TestCase):
             path = _write_flow(flow, ln_cfg())
 
             def concurrent_relink(req):
-                data = json.loads(path.read_text(encoding="utf-8"))
-                data["tracker"] = {
+                _rewrite_spec(path, tracker={
                     "id": "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
                     "identifier": "WOR-17",
                     "url": "https://linear.app/x/issue/WOR-17",
-                    "linkState": "linked",
-                    "depRelations": [],
-                }
-                path.write_text(json.dumps(data), encoding="utf-8")
+                })
                 return ok({"data": {"issue": {
                     "id": LN_UUID,
                     "identifier": "WOR-17",
@@ -310,7 +275,7 @@ class PersistExternal(unittest.TestCase):
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.CONFLICT)
             self.assertEqual(out.subtype, "already_linked")
-            saved = json.loads(path.read_text())["tracker"]
+            saved = _saved_tracker(path)
             self.assertEqual(
                 saved["id"], "bbbbbbbb-cccc-dddd-eeee-ffffffffffff")
 
@@ -334,7 +299,6 @@ class JiraCreateScreenFields(unittest.TestCase):
                     }],
                 }]}),
                 "lifecycle-create": create,
-                "sync-body-parent-read": _readback("jira", ""),
             })
             out = L.create(
                 flow, "fn-1-demo", title="T", body="B",
@@ -346,30 +310,6 @@ class JiraCreateScreenFields(unittest.TestCase):
                 {"kind": "jira_create_field_omitted",
                  "field": "description",
                  "reason": "not_on_create_screen"})
-            saved = json.loads(
-                (flow / "specs" / "fn-1-demo.json").read_text())["tracker"]
-            self.assertEqual(saved["mergeBaseFlow"], "")
-            self.assertEqual(saved["mergeBaseTracker"], "")
-            self.assertEqual(
-                _receipts(flow)[0]["degraded"], out["degraded"])
-
-            follow_up = fake_execute({
-                "sync-body-parent-read": _readback("jira", ""),
-                "wire-parent-read": _readback("jira", ""),
-                "wire-update": ok(None),
-                "wire-read": _readback("jira", "B"),
-            })
-            pushed = SB.sync_body(
-                flow, "fn-1-demo", flow_file_body="B",
-                direction="push", execute=follow_up)
-            self.assertNotIsInstance(pushed, TrackerError, pushed)
-            self.assertEqual(pushed["kind"], "pushed")
-            self.assertEqual(
-                [call.op for call in follow_up.calls].count("wire-update"), 1)
-            saved = json.loads(
-                (flow / "specs" / "fn-1-demo.json").read_text())["tracker"]
-            self.assertEqual(saved["mergeBaseFlow"], "B")
-            self.assertEqual(saved["mergeBaseTracker"], "B")
 
     def test_includes_description_when_createmeta_is_unresolved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -385,7 +325,6 @@ class JiraCreateScreenFields(unittest.TestCase):
                 "lifecycle-create-meta": TrackerError(
                     ErrorClass.TRANSPORT, "createmeta unavailable"),
                 "lifecycle-create": create,
-                "sync-body-parent-read": _readback("jira", "B"),
             })
             out = L.create(
                 flow, "fn-1-demo", title="T", body="B", execute=ex)
@@ -410,7 +349,7 @@ class CompleteIdentifierOnly(unittest.TestCase):
             out = L.complete_identifier_only(flow, "fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertTrue(out["completed"])
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            saved = _saved_tracker(path)
             self.assertEqual(saved["id"], LN_UUID)
             self.assertEqual(saved["linkState"], "linked")
             # Single atomic write: both fields present together
@@ -434,7 +373,7 @@ class CreateGuards(unittest.TestCase):
     def test_durable_collision_refuses(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            _write_flow(flow, gh_cfg(), spec_id="fn-1-demo")
+            mine = _write_flow(flow, gh_cfg(), spec_id="fn-1-demo")
             _write_flow(flow, gh_cfg(), spec_id="fn-2-other", tracker={
                 "id": GH_NODE, "identifier": "#99", "url": "u",
                 "linkState": "linked", "depRelations": [],
@@ -449,7 +388,7 @@ class CreateGuards(unittest.TestCase):
             self.assertIs(out.cls, ErrorClass.CONFLICT)
             self.assertEqual(out.subtype, "durable_collision")
             # Spec must remain unlinked
-            saved = json.loads((flow / "specs" / "fn-1-demo.json").read_text())["tracker"]
+            saved = _saved_tracker(mine)
             self.assertIsNone(saved.get("id"))
 
 
@@ -465,15 +404,10 @@ class ProviderCreateShapes(unittest.TestCase):
                     "html_url": "https://github.com/o/r/issues/42",
                     "body": stored,
                 }),
-                "sync-body-parent-read": _readback("github", stored),
             })
             out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
             self.assertEqual(out["id"], GH_NODE)
             self.assertEqual(out["identifier"], "#42")
-            saved = json.loads(
-                (flow / "specs" / "fn-1-demo.json").read_text())["tracker"]
-            self.assertEqual(
-                saved["mergeBaseTracker"], SB.trackerBodyForMerge(stored))
             req = ex.calls[0]
             self.assertIn("repos/o/r/issues", str(req.url_or_argv))
             self.assertEqual(req.method, "POST")
@@ -490,14 +424,10 @@ class ProviderCreateShapes(unittest.TestCase):
                     "references": {"full": "g/p#12"},
                     "description": stored,
                 }),
-                "sync-body-parent-read": _readback("gitlab", stored),
             })
             out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
             self.assertEqual(out["id"], str(GL_ID))
             self.assertEqual(out["identifier"], "g/p#12")
-            saved = json.loads(
-                (flow / "specs" / "fn-1-demo.json").read_text())["tracker"]
-            self.assertEqual(saved["mergeBaseTracker"], stored)
             self.assertIn("projects/1/issues", str(ex.calls[0].url_or_argv))
 
     def test_gitlab_falls_back_to_project_iid(self) -> None:
@@ -509,7 +439,6 @@ class ProviderCreateShapes(unittest.TestCase):
                     "id": GL_ID, "iid": 12,
                     "web_url": "https://gitlab.com/g/p/-/issues/12",
                 }),
-                "sync-body-parent-read": _readback("gitlab", "B"),
             })
             out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
             self.assertEqual(out["identifier"], "g/p#12")
@@ -528,15 +457,10 @@ class ProviderCreateShapes(unittest.TestCase):
                                   "description": stored},
                     }},
                 }),
-                "sync-body-parent-read": _readback("linear", stored),
             })
             out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
             self.assertEqual(out["id"], LN_UUID)
             self.assertEqual(out["identifier"], "WOR-17")
-            saved = json.loads(
-                (flow / "specs" / "fn-1-demo.json").read_text())["tracker"]
-            self.assertEqual(
-                saved["mergeBaseTracker"], SB.trackerBodyForMerge(stored))
             body = json.loads(ex.calls[0].body.decode())
             self.assertIn("issueCreate", body["query"])
             self.assertEqual(body["variables"]["input"]["teamId"], "team-1")
@@ -545,20 +469,15 @@ class ProviderCreateShapes(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
             _write_flow(flow, jr_cfg())
-            stored = "B"
             ex = fake_execute({
                 "lifecycle-create": ok({
                     "id": JR_ID, "key": "SCRUM-1",
                     "self": "https://ex.atlassian.net/rest/api/2/issue/10042",
                 }),
-                "sync-body-parent-read": _readback("jira", stored),
             })
             out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
             self.assertEqual(out["id"], JR_ID)
             self.assertEqual(out["identifier"], "SCRUM-1")
-            saved = json.loads(
-                (flow / "specs" / "fn-1-demo.json").read_text())["tracker"]
-            self.assertEqual(saved["mergeBaseTracker"], stored)
             self.assertEqual(out["url"], "https://ex.atlassian.net/browse/SCRUM-1")
             create = next(
                 call for call in ex.calls if call.op == "lifecycle-create")
@@ -567,97 +486,6 @@ class ProviderCreateShapes(unittest.TestCase):
             payload = json.loads(create.body.decode())
             self.assertEqual(payload["fields"]["project"]["id"], "10000")
             self.assertEqual(payload["fields"]["issuetype"]["id"], "10001")
-
-    def test_create_readback_changed_after_ack_keeps_base_unseeded(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            flow = Path(tmp) / ".flow"
-            path = _write_flow(flow, gh_cfg())
-            ex = fake_execute({
-                "lifecycle-create": ok({
-                    "id": 999, "node_id": GH_NODE, "number": 42,
-                    "html_url": "https://github.com/o/r/issues/42",
-                    "body": "B",
-                }),
-                "sync-body-parent-read": _readback(
-                    "github", "concurrent human edit"),
-            })
-
-            out = L.create(
-                flow, "fn-1-demo", title="T", body="B",
-                event="capture", execute=ex)
-
-            self.assertIsInstance(out, TrackerError)
-            self.assertIs(out.cls, ErrorClass.CONFLICT)
-            self.assertEqual(out.subtype, "readback_diverged")
-            self.assertEqual(
-                out.details["completed_steps"], ["create", "link"])
-            saved = json.loads(path.read_text())["tracker"]
-            self.assertEqual(saved["id"], GH_NODE)
-            self.assertIsNone(saved.get("mergeBaseFlow"))
-            self.assertIsNone(saved.get("mergeBaseTracker"))
-
-    def test_all_providers_readback_failure_keeps_link_but_no_base(self) -> None:
-        cases = [
-            ("github", gh_cfg, ok({
-                "id": 999, "node_id": GH_NODE, "number": 42,
-                "html_url": "https://github.com/o/r/issues/42",
-            }), GH_NODE),
-            ("gitlab", gl_cfg, ok({
-                "id": GL_ID, "iid": 12,
-                "web_url": "https://gitlab.com/g/p/-/issues/12",
-                "references": {"full": "g/p#12"},
-            }), str(GL_ID)),
-            ("linear", ln_cfg, ok({"data": {"issueCreate": {
-                "success": True,
-                "issue": {"id": LN_UUID, "identifier": "WOR-17",
-                          "url": "https://linear.app/x/issue/WOR-17"},
-            }}}), LN_UUID),
-            ("jira", jr_cfg, ok({
-                "id": JR_ID, "key": "SCRUM-1",
-                "self": "https://ex.atlassian.net/rest/api/2/issue/10042",
-            }), JR_ID),
-        ]
-        for provider, cfg_fn, create_response, durable in cases:
-            with self.subTest(provider=provider), \
-                    tempfile.TemporaryDirectory() as tmp:
-                flow = Path(tmp) / ".flow"
-                path = _write_flow(flow, cfg_fn())
-                ex = fake_execute({
-                    "lifecycle-create": create_response,
-                    "sync-body-parent-read": TrackerError(
-                        ErrorClass.TRANSPORT, "readback boom",
-                        subtype="readback"),
-                })
-                out = L.create(
-                    flow, "fn-1-demo", title="T", body="B",
-                    event="capture", execute=ex)
-                self.assertIsInstance(out, TrackerError)
-                self.assertEqual(out.subtype, "readback")
-                self.assertEqual(
-                    out.details["completed_steps"], ["create", "link"])
-                saved = json.loads(path.read_text())["tracker"]
-                self.assertEqual(saved["id"], durable)
-                self.assertIsNone(saved.get("mergeBaseFlow"))
-                self.assertIsNone(saved.get("mergeBaseTracker"))
-                self.assertIsNone(saved.get("lastSyncedAt"))
-                receipts = _receipts(flow)
-                self.assertEqual(len(receipts), 1)
-                self.assertEqual(receipts[0]["status"], "errored")
-                self.assertEqual(receipts[0]["tracker_id"], durable)
-
-
-class CreateFirstKeyParity(unittest.TestCase):
-    def test_matches_flowctl_compute(self) -> None:
-        import flowctl  # noqa: PLC0415
-        for typ, title, body in (
-            ("github", "T", "B"),
-            (" GitHub ", "x", ""),
-            ("linear", "中文", "body\n"),
-        ):
-            self.assertEqual(
-                L.compute_create_first_key(typ, title, body),
-                flowctl.compute_create_first_key(typ, title, body),
-            )
 
 
 if __name__ == "__main__":
@@ -756,8 +584,7 @@ class Round1Fixes(unittest.TestCase):
                                      source="mcp", execute=fake_execute({}))
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.CONFLICT)
-            saved = json.loads((flow / "specs" / "fn-1-demo.json")
-                               .read_text(encoding="utf-8"))["tracker"]
+            saved = _saved_tracker(flow / "specs" / "fn-1-demo.md")
             self.assertEqual(saved["id"], "old-uuid", "durable never erased")
 
     def test_persist_external_same_identifier_is_idempotent(self) -> None:
@@ -782,8 +609,7 @@ class Round1Fixes(unittest.TestCase):
                                      source="mcp", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.NOT_FOUND)
-            saved = json.loads((flow / "specs" / "fn-1-demo.json")
-                               .read_text(encoding="utf-8")).get("tracker")
+            saved = _saved_tracker(flow / "specs" / "fn-1-demo.md")
             self.assertNotEqual((saved or {}).get("linkState"), "identifier_only",
                                 "a semantic failure must not fake a degraded link")
 
@@ -966,55 +792,6 @@ class CreateLinkWriteFailureCarriesCreatedIdentity(unittest.TestCase):
             self.assertEqual(_receipts(flow), [])
 
 
-class PersistExternalReceiptFailureCarriesLinkedIdentity(unittest.TestCase):
-    """PR #246 review: the tracker block was persisted but the receipt write
-    failed -> a bare error read as "nothing happened" even though the spec is
-    already linked, and a retry took the idempotent linked return without ever
-    reporting the partial success. The error must carry the completed link
-    step plus the linked identity (mirrors create's receipt-failure branch)."""
-
-    def test_receipt_failure_error_carries_link_and_identity(self) -> None:
-        from unittest import mock
-
-        from flowctl_tracker.lifecycle import verbs
-        with tempfile.TemporaryDirectory() as tmp:
-            flow = Path(tmp) / ".flow"
-            spec_path = _write_flow(flow, ln_cfg())
-            ex = fake_execute({"lifecycle-resolve-uuid": ok({
-                "data": {"issue": {"id": LN_UUID, "identifier": "WOR-17",
-                                   "url": "https://linear.app/x/issue/WOR-17"}},
-            })})
-            boom = TrackerError(ErrorClass.TRANSPORT,
-                                "receipt write failed: disk full",
-                                subtype="write")
-            with mock.patch.object(verbs, "write_sync_receipt",
-                                   return_value=boom):
-                out = L.persist_external(flow, "fn-1-demo", identifier="WOR-17",
-                                         source="mcp", event="work.done",
-                                         execute=ex)
-            self.assertIsInstance(out, TrackerError)
-            self.assertIs(out.cls, ErrorClass.TRANSPORT)
-            details = out.details or {}
-            self.assertEqual(details.get("completed_steps"), ["link"])
-            self.assertEqual(details.get("id"), LN_UUID)
-            self.assertEqual(details.get("identifier"), "WOR-17")
-            self.assertEqual(details.get("linkState"), "linked")
-            # The persisted link is NOT rolled back.
-            saved = json.loads(spec_path.read_text(encoding="utf-8"))["tracker"]
-            self.assertEqual(saved["id"], LN_UUID)
-            self.assertEqual(saved["linkState"], "linked")
-
-            retry = L.persist_external(
-                flow, "fn-1-demo", identifier="WOR-17", source="mcp",
-                event="work.done", execute=fake_execute({}))
-            self.assertNotIsInstance(retry, TrackerError)
-            self.assertTrue(retry["idempotent"])
-            receipts = _receipts(flow)
-            self.assertEqual(len(receipts), 1)
-            self.assertEqual(receipts[0]["event"], "work.done")
-            self.assertEqual(receipts[0]["tracker_id"], LN_UUID)
-
-
 class Round5PersistIntegrity(unittest.TestCase):
     """PR #246 review: reload-under-lock persistence for create and
     persist-external. The pre-request spec snapshot must never be replayed
@@ -1027,25 +804,21 @@ class Round5PersistIntegrity(unittest.TestCase):
             path = _write_flow(flow, gh_cfg())
 
             def concurrent_create(req):
-                # Another command updates the same spec while create() is
-                # mid-flight (after its snapshot load, before its persist).
-                data = json.loads(path.read_text(encoding="utf-8"))
-                data["title"] = "CONCURRENT"
-                path.write_text(json.dumps(data), encoding="utf-8")
+                _rewrite_spec(path, title="CONCURRENT")
                 return ok({"id": 1, "node_id": GH_NODE, "number": 42,
                            "html_url": "https://github.com/o/r/issues/42"})
 
             ex = fake_execute({
                 "lifecycle-create": concurrent_create,
-                "sync-body-parent-read": _readback("github", "B"),
             })
             out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
-            saved = json.loads(path.read_text(encoding="utf-8"))
+            saved = _saved_doc(path)
             self.assertEqual(saved["title"], "CONCURRENT",
                              "persist must reload, never replay the stale snapshot")
-            self.assertEqual(saved["tracker"]["id"], GH_NODE)
-            self.assertEqual(saved["tracker"]["linkState"], "linked")
+            tr = _saved_tracker(path)
+            self.assertEqual(tr["id"], GH_NODE)
+            self.assertEqual(tr["linkState"], "linked")
 
     def test_persist_external_does_not_erase_concurrent_update(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1053,9 +826,7 @@ class Round5PersistIntegrity(unittest.TestCase):
             path = _write_flow(flow, ln_cfg())
 
             def concurrent_resolve(req):
-                data = json.loads(path.read_text(encoding="utf-8"))
-                data["title"] = "CONCURRENT"
-                path.write_text(json.dumps(data), encoding="utf-8")
+                _rewrite_spec(path, title="CONCURRENT")
                 return ok({"data": {"issue": {
                     "id": LN_UUID, "identifier": "WOR-17",
                     "url": "https://linear.app/x/issue/WOR-17"}}})
@@ -1064,28 +835,22 @@ class Round5PersistIntegrity(unittest.TestCase):
             out = L.persist_external(flow, "fn-1-demo", identifier="WOR-17",
                                      source="mcp", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
-            saved = json.loads(path.read_text(encoding="utf-8"))
+            saved = _saved_doc(path)
             self.assertEqual(saved["title"], "CONCURRENT",
                              "persist must reload, never replay the stale snapshot")
-            self.assertEqual(saved["tracker"]["id"], LN_UUID)
-            self.assertEqual(saved["tracker"]["linkState"], "linked")
+            tr = _saved_tracker(path)
+            self.assertEqual(tr["id"], LN_UUID)
+            self.assertEqual(tr["linkState"], "linked")
 
     def test_complete_identifier_only_does_not_erase_concurrent_update(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
             path = _write_flow(flow, ln_cfg(),
                                tracker={"id": None, "identifier": "WOR-17",
-                                        "url": None, "lastSyncedAt": None,
-                                        "linkState": "identifier_only",
-                                        "depRelations": []})
+                                        "url": None})
 
             def concurrent_resolve(req):
-                # Another command updates the same spec while the GraphQL
-                # UUID resolve is in flight (after the snapshot load,
-                # before the persist).
-                data = json.loads(path.read_text(encoding="utf-8"))
-                data["title"] = "CONCURRENT"
-                path.write_text(json.dumps(data), encoding="utf-8")
+                _rewrite_spec(path, title="CONCURRENT")
                 return ok({"data": {"issue": {
                     "id": LN_UUID, "identifier": "WOR-17",
                     "url": "https://linear.app/x/issue/WOR-17"}}})
@@ -1095,13 +860,14 @@ class Round5PersistIntegrity(unittest.TestCase):
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["linkState"], "linked")
             self.assertTrue(out["completed"])
-            saved = json.loads(path.read_text(encoding="utf-8"))
+            saved = _saved_doc(path)
             self.assertEqual(saved["title"], "CONCURRENT",
                              "persist must reload, never replay the stale snapshot")
-            self.assertEqual(saved["tracker"]["id"], LN_UUID)
-            self.assertEqual(saved["tracker"]["linkState"], "linked")
-            self.assertEqual(saved["tracker"]["identifier"], "WOR-17")
-            self.assertEqual(saved["tracker"]["url"],
+            tr = _saved_tracker(path)
+            self.assertEqual(tr["id"], LN_UUID)
+            self.assertEqual(tr["linkState"], "linked")
+            self.assertEqual(tr["identifier"], "WOR-17")
+            self.assertEqual(tr["url"],
                              "https://linear.app/x/issue/WOR-17")
 
     def test_complete_identifier_only_refuses_concurrent_relink(self) -> None:
@@ -1109,22 +875,13 @@ class Round5PersistIntegrity(unittest.TestCase):
             flow = Path(tmp) / ".flow"
             path = _write_flow(flow, ln_cfg(),
                                tracker={"id": None, "identifier": "WOR-17",
-                                        "url": None, "lastSyncedAt": None,
-                                        "linkState": "identifier_only",
-                                        "depRelations": []})
+                                        "url": None})
 
             def concurrent_set_tracker_id(req):
-                # A concurrent `sync set-tracker-id` links the spec to a
-                # DIFFERENT durable identity while the GraphQL UUID resolve
-                # is in flight. The locked merge must re-check the reloaded
-                # block and refuse - an unconditional merge would silently
-                # repoint the spec to the resolution result for the OLD
-                # identifier.
-                data = json.loads(path.read_text(encoding="utf-8"))
-                data["tracker"] = {"id": "lin_OTHER_uuid", "identifier": "WOR-99",
-                                   "url": "https://linear.app/x/issue/WOR-99",
-                                   "linkState": "linked", "depRelations": []}
-                path.write_text(json.dumps(data), encoding="utf-8")
+                _rewrite_spec(path, tracker={
+                    "id": "lin_OTHER_uuid", "identifier": "WOR-99",
+                    "url": "https://linear.app/x/issue/WOR-99",
+                })
                 return ok({"data": {"issue": {
                     "id": LN_UUID, "identifier": "WOR-17",
                     "url": "https://linear.app/x/issue/WOR-17"}}})
@@ -1138,7 +895,7 @@ class Round5PersistIntegrity(unittest.TestCase):
             self.assertEqual(details.get("linkState"), "linked")
             self.assertEqual(details.get("identifier"), "WOR-99")
             self.assertEqual(details.get("id"), "lin_OTHER_uuid")
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            saved = _saved_tracker(path)
             self.assertEqual(saved["id"], "lin_OTHER_uuid",
                              "concurrent identity must survive untouched")
             self.assertEqual(saved["identifier"], "WOR-99")
@@ -1150,9 +907,7 @@ class Round5PersistIntegrity(unittest.TestCase):
             path = _write_flow(flow, ln_cfg())
 
             def concurrent_then_down(req):
-                data = json.loads(path.read_text(encoding="utf-8"))
-                data["title"] = "CONCURRENT"
-                path.write_text(json.dumps(data), encoding="utf-8")
+                _rewrite_spec(path, title="CONCURRENT")
                 return TrackerError(ErrorClass.TRANSPORT, "unreachable")
 
             ex = fake_execute({"lifecycle-resolve-uuid": concurrent_then_down})
@@ -1161,49 +916,11 @@ class Round5PersistIntegrity(unittest.TestCase):
                                      source="mcp", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["linkState"], "identifier_only")
-            saved = json.loads(path.read_text(encoding="utf-8"))
+            saved = _saved_doc(path)
             self.assertEqual(saved["title"], "CONCURRENT")
-            self.assertEqual(saved["tracker"]["identifier"], "WOR-17")
-            self.assertEqual(saved["tracker"]["linkState"], "identifier_only")
-
-    def test_persist_external_holds_spec_claim_through_receipt_and_retry(
-            self) -> None:
-        from unittest import mock
-
-        with tempfile.TemporaryDirectory() as tmp:
-            flow = Path(tmp) / ".flow"
-            _write_flow(flow, ln_cfg())
-            rec_path = flow / "create-first" / "spec-fn-1-demo.json"
-            seen: list[str] = []
-
-            def receipt(*_args, **_kwargs):
-                claim = json.loads(rec_path.read_text(encoding="utf-8"))
-                self.assertEqual(claim["status"], "pending")
-                self.assertEqual(claim["op"], "persist-external")
-                seen.append(claim["op"])
-                return None
-
-            ex = fake_execute({
-                "lifecycle-resolve-uuid": gql_issue(
-                    {"id": LN_UUID, "identifier": "WOR-17",
-                     "url": "https://linear.app/x/issue/WOR-17"}),
-            })
-            with mock.patch.object(L.verbs, "write_sync_receipt",
-                                   side_effect=receipt):
-                first = L.persist_external(
-                    flow, "fn-1-demo", identifier="WOR-17",
-                    source="mcp", execute=ex, event="capture")
-                self.assertNotIsInstance(first, TrackerError, first)
-                self.assertFalse(rec_path.exists())
-
-                retry = L.persist_external(
-                    flow, "fn-1-demo", identifier="WOR-17",
-                    source="mcp", execute=fake_execute({}), event="capture")
-                self.assertNotIsInstance(retry, TrackerError, retry)
-                self.assertTrue(retry["idempotent"])
-                self.assertFalse(rec_path.exists())
-
-            self.assertEqual(seen, ["persist-external", "persist-external"])
+            tr = _saved_tracker(path)
+            self.assertEqual(tr["identifier"], "WOR-17")
+            self.assertEqual(tr["linkState"], "identifier_only")
 
 
 class CreateFirstClaimSerialization(unittest.TestCase):
@@ -1343,24 +1060,14 @@ class Round6CreateSpecClaimSerialization(unittest.TestCase):
                 return ok({"id": 1, "node_id": GH_NODE, "number": 42,
                            "html_url": "https://github.com/o/r/issues/42"})
 
-            def seed_read(req):
-                claim = json.loads(rec_path.read_text(encoding="utf-8"))
-                inner["claim_held_through_seed"] = (
-                    claim.get("status") == "pending"
-                    and claim.get("specId") == "fn-1-demo"
-                )
-                return _readback("github", "B")
-
             ex = fake_execute({
                 "lifecycle-create": racing_create,
-                "sync-body-parent-read": seed_read,
             })
             out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(
                 [c.op for c in ex.calls].count("lifecycle-create"), 1,
                 "exactly ONE remote create")
-            self.assertTrue(inner["claim_held_through_seed"])
 
             raced = inner["out"]
             self.assertIsInstance(raced, TrackerError)
@@ -1369,7 +1076,7 @@ class Round6CreateSpecClaimSerialization(unittest.TestCase):
             self.assertTrue(raced.auto_retryable)
             self.assertEqual((raced.details or {}).get("specId"), "fn-1-demo")
 
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            saved = _saved_tracker(path)
             self.assertEqual(saved["id"], GH_NODE)
             self.assertEqual(saved["linkState"], "linked")
             self.assertFalse(rec_path.exists(),
@@ -1382,15 +1089,8 @@ class Round6CreateSpecClaimSerialization(unittest.TestCase):
             rec_path = flow / "create-first" / "spec-fn-1-demo.json"
 
             def link_appears_mid_flight(req):
-                # An identity lands on the spec while the provider create is
-                # in flight (e.g. a path that takes no create claim). The
-                # locked link write must refuse to replace it - replacing it
-                # is exactly the orphan-duplicate the review cites.
-                data = json.loads(path.read_text(encoding="utf-8"))
-                data["tracker"] = {"id": "I_kwDOOtherNode", "identifier": "#7",
-                                   "url": "u7", "linkState": "linked",
-                                   "depRelations": []}
-                path.write_text(json.dumps(data), encoding="utf-8")
+                _rewrite_spec(path, tracker={
+                    "id": "I_kwDOOtherNode", "identifier": "#7", "url": "u7"})
                 return ok({"id": 1, "node_id": GH_NODE, "number": 42,
                            "html_url": "https://github.com/o/r/issues/42"})
 
@@ -1405,7 +1105,7 @@ class Round6CreateSpecClaimSerialization(unittest.TestCase):
             self.assertEqual(details.get("completed_steps"), ["create"])
             self.assertEqual(details.get("id"), GH_NODE)
             self.assertEqual(details.get("identifier"), "#42")
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
+            saved = _saved_tracker(path)
             self.assertEqual(saved["id"], "I_kwDOOtherNode",
                              "existing link must survive")
             self.assertEqual(saved["identifier"], "#7")
@@ -1415,10 +1115,6 @@ class Round6CreateSpecClaimSerialization(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
             path = _write_flow(flow, gh_cfg())
-            # A stale-but-reclaimable claim plus a spec that got LINKED after
-            # the caller's unlocked check: the locked re-check must refuse
-            # before any remote mutation.
-            data = json.loads(path.read_text(encoding="utf-8"))
 
             real_load = L.create.__globals__["load_spec"]
             calls = {"n": 0}
@@ -1426,12 +1122,8 @@ class Round6CreateSpecClaimSerialization(unittest.TestCase):
             def linking_load(fd, sid):
                 calls["n"] += 1
                 if calls["n"] == 2:
-                    # Between the unlocked check (first load) and the locked
-                    # re-check (second load) another worker links the spec.
-                    data["tracker"] = {"id": GH_NODE, "identifier": "#42",
-                                       "url": "u", "linkState": "linked",
-                                       "depRelations": []}
-                    path.write_text(json.dumps(data), encoding="utf-8")
+                    _rewrite_spec(path, tracker={
+                        "id": GH_NODE, "identifier": "#42", "url": "u"})
                 return real_load(fd, sid)
 
             L.create.__globals__["load_spec"] = linking_load
@@ -1498,11 +1190,8 @@ class Round6LockedCollisionScan(unittest.TestCase):
 
     @staticmethod
     def _link_other(other: Path) -> None:
-        data = json.loads(other.read_text(encoding="utf-8"))
-        data["tracker"] = {"id": LN_UUID, "identifier": "WOR-17",
-                           "url": "u", "linkState": "linked",
-                           "depRelations": []}
-        other.write_text(json.dumps(data), encoding="utf-8")
+        _rewrite_spec(other, tracker={
+            "id": LN_UUID, "identifier": "WOR-17", "url": "u"})
 
     def test_persist_external_collision_caught_inside_the_lock(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1532,7 +1221,7 @@ class Round6LockedCollisionScan(unittest.TestCase):
             self.assertIs(out.cls, ErrorClass.CONFLICT)
             self.assertEqual(out.subtype, "durable_collision")
             self.assertEqual((out.details or {}).get("owner"), "fn-2-other")
-            saved = json.loads(mine.read_text(encoding="utf-8"))["tracker"]
+            saved = _saved_tracker(mine)
             self.assertIsNone(saved.get("id"), "loser spec stays unlinked")
 
     def test_complete_identifier_only_collision_caught_inside_the_lock(self) -> None:
@@ -1540,8 +1229,7 @@ class Round6LockedCollisionScan(unittest.TestCase):
             flow = Path(tmp) / ".flow"
             other = _write_flow(flow, ln_cfg(), spec_id="fn-2-other")
             mine = _write_flow(flow, ln_cfg(), tracker={
-                "id": None, "identifier": "WOR-17", "url": None,
-                "linkState": "identifier_only", "depRelations": []})
+                "id": None, "identifier": "WOR-17", "url": None})
 
             gl = L.complete_identifier_only.__globals__
             real_lw = gl["locked_tracker_write"]
@@ -1565,7 +1253,7 @@ class Round6LockedCollisionScan(unittest.TestCase):
             self.assertIs(out.cls, ErrorClass.CONFLICT)
             self.assertEqual(out.subtype, "durable_collision")
             self.assertEqual((out.details or {}).get("owner"), "fn-2-other")
-            saved = json.loads(mine.read_text(encoding="utf-8"))["tracker"]
+            saved = _saved_tracker(mine)
             self.assertIsNone(saved.get("id"))
             self.assertEqual(saved["linkState"], "identifier_only",
                              "loser record is not upgraded")
@@ -1577,11 +1265,8 @@ class Round6LockedCollisionScan(unittest.TestCase):
             mine = _write_flow(flow, gh_cfg(), spec_id="fn-1-demo")
 
             def create_then_lose_race(req):
-                data = json.loads(other.read_text(encoding="utf-8"))
-                data["tracker"] = {"id": GH_NODE, "identifier": "#42",
-                                   "url": "u", "linkState": "linked",
-                                   "depRelations": []}
-                other.write_text(json.dumps(data), encoding="utf-8")
+                _rewrite_spec(other, tracker={
+                    "id": GH_NODE, "identifier": "#42", "url": "u"})
                 return ok({"id": 1, "node_id": GH_NODE, "number": 42,
                            "html_url": "https://github.com/o/r/issues/42"})
 
@@ -1596,5 +1281,40 @@ class Round6LockedCollisionScan(unittest.TestCase):
             # failure that invites a duplicating retry.
             self.assertEqual(details.get("completed_steps"), ["create"])
             self.assertEqual(details.get("id"), GH_NODE)
-            saved = json.loads(mine.read_text(encoding="utf-8"))["tracker"]
+            saved = _saved_tracker(mine)
             self.assertIsNone(saved.get("id"), "loser spec stays unlinked")
+
+    def test_frontmatter_preserves_unknown_keys_and_verbatim_body(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            (flow / "specs").mkdir(parents=True)
+            (flow / "config.json").write_text(json.dumps(gh_cfg()), encoding="utf-8")
+            body = "# Heading\n\nBody with `code`,   trailing spaces  \nand unicode: ümlaut.\n"
+            original = (
+                "---\n"
+                "id: fn-1-demo\n"
+                "title: Demo Spec\n"
+                "repos:\n"
+                "  - api\n"
+                "  - web\n"
+                "custom_owner: team-core\n"
+                "---\n"
+                + body
+            )
+            path = flow / "specs" / "fn-1-demo.md"
+            path.write_text(original, encoding="utf-8")
+            ex = fake_execute({"lifecycle-create": ok({
+                "id": 1, "node_id": GH_NODE, "number": 42,
+                "html_url": "https://github.com/o/r/issues/42",
+            })})
+            out = L.create(flow, "fn-1-demo", title="Demo Spec", body=body, execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            after = path.read_text(encoding="utf-8")
+            _fm, _eol, after_body = SS.split_frontmatter(after)
+            self.assertEqual(after_body, body)
+            doc, _ = SS.load_spec_doc(path)
+            self.assertEqual(doc["repos"], ["api", "web"])
+            self.assertEqual(doc["custom_owner"], "team-core")
+            self.assertEqual(doc["tracker"]["id"], GH_NODE)
+            self.assertEqual(doc["tracker"]["identifier"], "#42")
+            self.assertEqual(doc["tracker"]["url"], "https://github.com/o/r/issues/42")

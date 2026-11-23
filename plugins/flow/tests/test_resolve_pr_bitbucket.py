@@ -14,8 +14,7 @@ from test_forge_bitbucket import ORIGIN
 from test_make_pr_bitbucket import BitbucketShellCase, answers, recorded
 
 TESTS = Path(__file__).resolve().parent
-SKILL = TESTS.parent / "skills" / "flow-next-resolve-pr"
-SCRIPTS = SKILL / "scripts"
+SCRIPTS = TESTS.parent / "scripts" / "resolve-pr"
 PULLS = "/repositories/flownextnew/flownext/pullrequests"
 OPEN_THREAD, GENERAL, SETTLED = 901784115, 901784108, 901784139   # the recorded comment ids
 
@@ -191,25 +190,6 @@ class ReplyAndResolveTests(BitbucketCommentCase):
         resolve = self.script("resolve-bb-comment", "9", "1", BKT_ANSWERS=answers(missing))
         self.assertEqual(resolve.returncode, 1)
         self.assertIn("404 Not Found", resolve.stderr)
-
-
-class ReferenceTests(BitbucketCommentCase):
-    REFERENCE = (SKILL / "forge-bitbucket.md").read_text(encoding="utf-8")
-
-    def test_every_script_the_reference_names_exists(self):
-        named = set(re.findall(r'"\$SCRIPTS/([a-z-]+)"', self.REFERENCE))
-        self.assertEqual(named, {"get-bb-current-pr", "get-bb-comments", "get-bb-pr", "reply-to-bb-comment", "resolve-bb-comment"})
-        for name in named:
-            self.assertTrue((SCRIPTS / name).is_file(), name)
-
-    def test_the_workflow_picks_bitbucket_from_the_snapshot(self):
-        lines = "\n".join(l for l in (SKILL / "workflow.md").read_text(encoding="utf-8").splitlines() if l.startswith("FORGE="))
-        flowctl = self.tmp / "flowctl"
-        flowctl.write_text("#!/bin/sh\necho '{\"forge\": \"bitbucket\"}'\n", encoding="utf-8")
-        flowctl.chmod(0o755)
-        result = self.run_sh(["bash", "-c", f'set -e\nFLOWCTL={flowctl}\n{lines}\nprintf %s "$FORGE"'])
-        self.assertEqual((result.returncode, result.stdout), (0, "bitbucket"), result.stderr)
-        self.assertTrue((SKILL / "forge-bitbucket.md").is_file())
 
 
 if __name__ == "__main__":

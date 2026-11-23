@@ -695,53 +695,6 @@ class DifferentScopeResolvesDoNotClobber(unittest.TestCase):
                                  "both scopes present -> complete")
 
 
-class FlowctlWritersRouteThroughTheLock(unittest.TestCase):
-    """set_config AND cmd_init hold `.flow/.locks/config.d` while writing."""
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "flowctl_under_lock_test", ROOT / "scripts" / "flowctl.py")
-        cls.flowctl = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(cls.flowctl)
-
-    def _assert_holds_lock_during_write(self, invoke) -> None:
-        seen = {"locked_during_write": False}
-        real_write = self.flowctl.atomic_write_json
-
-        def spying_write(path, data):
-            if path.name == "config.json":
-                seen["locked_during_write"] = (
-                    Path(self.flow, ".locks", "config.d").is_dir())
-            return real_write(path, data)
-
-        with mock.patch.object(self.flowctl, "atomic_write_json", spying_write):
-            invoke()
-        self.assertTrue(seen["locked_during_write"],
-                        "config.json written without holding the shared lock")
-
-    def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.flow = Path(self.tmp.name) / ".flow"
-        self.flow.mkdir()
-        self._flow_patch = mock.patch.object(
-            self.flowctl, "get_flow_dir", return_value=self.flow)
-        self._flow_patch.start()
-        self.addCleanup(self._flow_patch.stop)
-
-    def test_set_config_holds_the_lock(self) -> None:
-        self._assert_holds_lock_during_write(
-            lambda: self.flowctl.set_config("tracker.enabled", "true"))
-
-    def test_cmd_init_config_write_holds_the_lock(self) -> None:
-        import argparse
-        args = argparse.Namespace(json=True)
-        with mock.patch.object(self.flowctl, "json_output"):
-            self._assert_holds_lock_during_write(
-                lambda: self.flowctl.cmd_init(args))
-
 if __name__ == "__main__":
     unittest.main()
 

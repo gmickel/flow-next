@@ -17,7 +17,6 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from flowctl_tracker import syncbody as SB  # noqa: E402
 from flowctl_tracker import wire as W  # noqa: E402
 from flowctl_tracker.lifecycle import verbs as LV  # noqa: E402
 from flowctl_tracker.providers import jira_markup as JM  # noqa: E402
@@ -117,30 +116,16 @@ def jr_cfg() -> dict:
                             "issueTypeId": "10001", "apiVersion": 2}}}}
 
 
-def write_flow(flow: Path, *, base_flow=None, base_tracker=None,
-               linked: bool = True) -> Path:
+def write_flow(flow: Path, *, linked: bool = True) -> Path:
     (flow / "specs").mkdir(parents=True, exist_ok=True)
     (flow / "config.json").write_text(json.dumps(jr_cfg()), encoding="utf-8")
-    tracker = {"id": None, "identifier": None, "url": None,
-               "lastSyncedAt": None, "depRelations": []}
+    lines = ["---", "id: fn-1-demo", "title: Demo"]
     if linked:
-        tracker = {
-            "id": JR_ID, "identifier": "SCRUM-1", "url": "https://x",
-            "lastSyncedAt": "2020-01-01T00:00:00Z", "depRelations": [],
-            "linkState": "linked",
-            "mergeBaseFlow": base_flow, "mergeBaseTracker": base_tracker,
-            "baseHashFlow": None, "baseHashTracker": None,
-        }
-    spec = {"id": "fn-1-demo", "title": "Demo", "status": "open",
-            "branch_name": "fn-1-demo", "tracker": tracker}
-    path = flow / "specs" / "fn-1-demo.json"
-    path.write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+        lines.extend(["tracker:", f'  id: "{JR_ID}"', '  identifier: "SCRUM-1"', '  url: "https://x"'])
+    lines.extend(["---", ""])
+    path = flow / "specs" / "fn-1-demo.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
     return path
-
-
-def saved_tracker(flow: Path) -> dict:
-    return json.loads(
-        (flow / "specs" / "fn-1-demo.json").read_text(encoding="utf-8"))["tracker"]
 
 
 # ---------------------------------------------------------------------------
@@ -292,60 +277,6 @@ class WriteBoundary(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class SyncRoundTrip(unittest.TestCase):
-    def test_create_base_matches_next_read_without_a_diff(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            flow = Path(tmp)
-            write_flow(flow, linked=False)
-            fake = FakeJira()
-            created = LV.create(flow, "fn-1-demo", title="Demo", body=SPEC_MD,
-                                execute=fake)
-            self.assertNotIsInstance(created, TrackerError, created)
-            self.assertEqual(fake.description, JM.markdown_to_wiki(SPEC_MD))
-            saved = saved_tracker(flow)
-            self.assertEqual(saved["mergeBaseFlow"], SPEC_MD)
-            self.assertEqual(saved["mergeBaseTracker"],
-                             SB.trackerBodyForMerge(
-                                 JM.wiki_to_markdown(fake.description)))
-            again = SB.sync_body(flow, "fn-1-demo", flow_file_body=SPEC_MD,
-                                 direction="push", execute=fake)
-            self.assertEqual(again["kind"], "noop")
-            self.assertNotIn("wire-update", fake.ops())
-
-    def test_push_then_reconcile_reports_no_divergence(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            flow = Path(tmp)
-            write_flow(flow)
-            fake = FakeJira("old")
-            pushed = SB.sync_body(flow, "fn-1-demo", flow_file_body=SPEC_MD,
-                                  tracker_body=SPEC_MD, direction="push",
-                                  execute=fake)
-            self.assertEqual(pushed["kind"], "pushed")
-            self.assertEqual(fake.description, JM.markdown_to_wiki(SPEC_MD))
-
-            read = W.dispatch("read", jr_cfg(), locator=LOC, execute=fake)
-            self.assertEqual(SB.trackerBodyForMerge(read["body"]),
-                             saved_tracker(flow)["mergeBaseTracker"])
-            writes = fake.ops().count("wire-update")
-            again = SB.sync_body(flow, "fn-1-demo", flow_file_body=SPEC_MD,
-                                 tracker_body=read["body"],
-                                 expected_tracker_body=read["body"],
-                                 direction="push", execute=fake)
-            self.assertEqual(again["kind"], "noop")
-            self.assertEqual(fake.ops().count("wire-update"), writes)
-
-    def test_genuine_jira_edit_is_still_detected(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            flow = Path(tmp)
-            write_flow(flow)
-            fake = FakeJira("old")
-            SB.sync_body(flow, "fn-1-demo", flow_file_body=SPEC_MD,
-                         direction="push", execute=fake)
-            fake.description += "\nh3. Added in Jira"
-            read = W.dispatch("read", jr_cfg(), locator=LOC, execute=fake)
-            self.assertNotEqual(SB.trackerBodyForMerge(read["body"]),
-                                saved_tracker(flow)["mergeBaseTracker"])
-            self.assertTrue(read["body"].endswith("\n### Added in Jira"))
-
     def test_marker_comments_dedup_including_pr_link_fallback(self) -> None:
         fake = FakeJira()
         marker = "<!-- flow-next:sync issue=SCRUM-1 spec=fn-1 event=e evidence=a_b -->"
@@ -360,91 +291,6 @@ class SyncRoundTrip(unittest.TestCase):
         self.assertEqual(first["kind"], "comment-fallback")
         self.assertTrue(second["deduped"])
         self.assertEqual(fake.ops().count("wire-comment-add"), 2)
-
-
-# ---------------------------------------------------------------------------
-# R4 - issues linked before fn-253 still hold raw Markdown
-# ---------------------------------------------------------------------------
-
-LEGACY_MD = "## Goal\n\nShip **it**.\n"
-
-
-class LegacyBody(unittest.TestCase):
-    def _legacy(self, tmp: str):
-        flow = Path(tmp)
-        base = SB.trackerBodyForMerge(LEGACY_MD)
-        write_flow(flow, base_flow=LEGACY_MD, base_tracker=base)
-        return flow, FakeJira(LEGACY_MD), base
-
-    def test_pull_refuses_before_conversion_then_push_converts(self) -> None:
-        reads = {
-            "parent read": None,
-            "wire read": lambda fake: (
-                lambda loc: W.dispatch("read", jr_cfg(), locator=loc,
-                                       execute=fake)),
-        }
-        for mode, reader in reads.items():
-            with self.subTest(read=mode), tempfile.TemporaryDirectory() as tmp:
-                flow, fake, base = self._legacy(tmp)
-                pulled = SB.sync_body(
-                    flow, "fn-1-demo", flow_file_body=LEGACY_MD,
-                    direction="pull", execute=fake,
-                    tracker_read=reader(fake) if reader else None)
-                self.assertIsInstance(pulled, TrackerError)
-                self.assertEqual(pulled.subtype, "jira_body_unconverted")
-                self.assertEqual(saved_tracker(flow)["mergeBaseTracker"], base)
-                self.assertEqual(saved_tracker(flow)["mergeBaseFlow"], LEGACY_MD)
-                self.assertFalse(MUTATING & set(fake.ops()))
-
-                pushed = SB.sync_body(flow, "fn-1-demo",
-                                      flow_file_body=LEGACY_MD,
-                                      direction="push", execute=fake)
-                self.assertEqual(pushed["kind"], "pushed")
-                self.assertEqual(fake.description,
-                                 JM.markdown_to_wiki(LEGACY_MD))
-                self.assertEqual(saved_tracker(flow)["mergeBaseTracker"],
-                                 SB.trackerBodyForMerge(LEGACY_MD))
-
-                again = SB.sync_body(flow, "fn-1-demo",
-                                     flow_file_body=LEGACY_MD,
-                                     direction="pull", execute=fake)
-                self.assertNotIsInstance(again, TrackerError, again)
-
-    def test_reconcile_converts_an_unchanged_legacy_body(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            flow, fake, base = self._legacy(tmp)
-            out = SB.sync_body(flow, "fn-1-demo", flow_file_body=LEGACY_MD,
-                               tracker_body=LEGACY_MD,
-                               expected_tracker_body=base,
-                               direction="push", execute=fake)
-            self.assertEqual(out["kind"], "pushed")
-            self.assertEqual(fake.description, JM.markdown_to_wiki(LEGACY_MD))
-
-    def test_reconcile_refuses_a_merge_against_the_decoded_read(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            flow, fake, base = self._legacy(tmp)
-            decoded = W.dispatch("read", jr_cfg(), locator=LOC,
-                                 execute=fake)["body"]
-            self.assertNotEqual(SB.trackerBodyForMerge(decoded), base)
-            out = SB.sync_body(flow, "fn-1-demo", flow_file_body=decoded,
-                               tracker_body=decoded,
-                               expected_tracker_body=decoded,
-                               direction="push", execute=fake)
-            self.assertIsInstance(out, TrackerError)
-            self.assertEqual(out.subtype, "jira_body_unconverted")
-            self.assertEqual(fake.description, LEGACY_MD)
-            self.assertEqual(saved_tracker(flow)["mergeBaseTracker"], base)
-
-    def test_edited_legacy_body_takes_the_normal_path(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            flow, fake, _base = self._legacy(tmp)
-            fake.description = LEGACY_MD + "\nEdited in Jira."
-            pulled = SB.sync_body(flow, "fn-1-demo", flow_file_body=LEGACY_MD,
-                                  direction="pull", execute=fake)
-            self.assertNotIsInstance(pulled, TrackerError, pulled)
-            self.assertEqual(pulled["mergeBaseTracker"],
-                             SB.trackerBodyForMerge(
-                                 JM.wiki_to_markdown(fake.description)))
 
 
 if __name__ == "__main__":

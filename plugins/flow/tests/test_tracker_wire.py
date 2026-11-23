@@ -2358,3 +2358,19 @@ class BacklogRelationAndQuestionWire(unittest.TestCase):
             [call.op for call in truncated.calls],
             ["wire-comment-list"] * W._MAX_PAGES,
         )
+
+    def test_wire_read_returns_snapshot_hash_with_lf_normalization(self) -> None:
+        from flowctl_tracker.spec_store import body_snapshot_hash  # noqa: PLC0415
+        lf_issue = dict(GH_ISSUE, body="Line 1\nLine 2\n")
+        crlf_issue = dict(GH_ISSUE, body="Line 1\r\nLine 2\r\n")
+        edited_issue = dict(GH_ISSUE, body="Line 1\nLine 2 edited\n")
+        out_lf = W.dispatch("read", gh_cfg(), locator=loc(GH_NODE, "#42"),
+                            execute=fake_execute({"wire-read": ok(lf_issue)}))
+        out_crlf = W.dispatch("read", gh_cfg(), locator=loc(GH_NODE, "#42"),
+                              execute=fake_execute({"wire-read": ok(crlf_issue)}))
+        out_ed = W.dispatch("read", gh_cfg(), locator=loc(GH_NODE, "#42"),
+                            execute=fake_execute({"wire-read": ok(edited_issue)}))
+        self.assertTrue(out_lf["snapshot"].startswith("sha256:"))
+        self.assertEqual(out_lf["snapshot"], body_snapshot_hash("Line 1\nLine 2\n"))
+        self.assertEqual(out_lf["snapshot"], out_crlf["snapshot"])
+        self.assertNotEqual(out_lf["snapshot"], out_ed["snapshot"])

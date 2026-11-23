@@ -23,7 +23,7 @@ from flowctl_tracker import classify  # noqa: E402
 from flowctl_tracker import wire as W  # noqa: E402
 from flowctl_tracker.types import ErrorClass, Response, TrackerError  # noqa: E402
 
-FLOWCTL = ROOT / "scripts" / "flowctl.py"
+FLOWCTL = ROOT / "scripts" / "edge.py"
 BASE = "https://ex.atlassian.net"
 IDEA_ID = "20007"
 LINK_TYPES = {"issueLinkTypes": [
@@ -221,18 +221,24 @@ class IdeasAreReadOnly(unittest.TestCase):
 
 def _linked_spec(flow: Path, spec_id: str, durable: str, display: str) -> None:
     (flow / "specs").mkdir(parents=True, exist_ok=True)
-    (flow / "specs" / f"{spec_id}.json").write_text(json.dumps({
-        "id": spec_id, "title": "Demo", "status": "open", "branch_name": spec_id,
-        "tracker": {"id": durable, "identifier": display, "url": None,
-                    "lastSyncedAt": None, "depRelations": [],
-                    "linkState": "linked"}}), encoding="utf-8")
+    lines = [
+        "---",
+        f"id: {spec_id}",
+        "title: Demo",
+        "tracker:",
+        f"  id: {json.dumps(durable)}",
+        f"  identifier: {json.dumps(display)}",
+        "---",
+        "",
+    ]
+    (flow / "specs" / f"{spec_id}.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 class IdeaStatusAndRelationsAreReadOnly(unittest.TestCase):
     """R6 siblings: dependency links and status transitions skip the
     pre-write parent read, so each refuses an idea itself."""
 
-    def _relate(self, a: str, b: str, *, many: bool = False):
+    def _relate(self, a: str, b: str):
         from flowctl_tracker import relate as R  # noqa: PLC0415
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
@@ -241,22 +247,17 @@ class IdeaStatusAndRelationsAreReadOnly(unittest.TestCase):
             (flow / "config.json").write_text(
                 json.dumps(jr_cfg(idea_keys=["IDEAS"])), encoding="utf-8")
             ex = fake_execute({})
-            if many:
-                out = R.relate_many(flow, "fn-1-a", ["fn-2-b"], event="plan",
-                                    execute=ex)[0]
-            else:
-                out = R.relate(flow, "fn-1-a", blocked_by="fn-2-b", execute=ex)
+            out = R.relate(flow, "fn-1-a", blocked_by="fn-2-b", execute=ex)
         return out, ex
 
     def test_relation_with_an_idea_at_either_end_makes_no_request(self) -> None:
         idea_end, delivery = (IDEA_ID, "IDEAS-7"), ("10012", "PROJ-12")
-        for many in (False, True):
-            for a, b in ((idea_end, delivery), (delivery, idea_end)):
-                out, ex = self._relate(a, b, many=many)
-                self.assertIsInstance(out, TrackerError, (many, a))
-                self.assertIs(out.cls, ErrorClass.CAPABILITY, (many, a))
-                self.assertEqual(out.subtype, "idea_read_only", (many, a))
-                self.assertEqual(ex.calls, [], (many, a))
+        for a, b in ((idea_end, delivery), (delivery, idea_end)):
+            out, ex = self._relate(a, b)
+            self.assertIsInstance(out, TrackerError, a)
+            self.assertIs(out.cls, ErrorClass.CAPABILITY, a)
+            self.assertEqual(out.subtype, "idea_read_only", a)
+            self.assertEqual(ex.calls, [], a)
 
     def test_status_transition_on_an_idea_makes_no_request(self) -> None:
         from flowctl_tracker.status.providers import apply_status  # noqa: PLC0415
@@ -517,8 +518,7 @@ class Cli(unittest.TestCase):
 
     def _repo(self, tmp: str, config: dict) -> Path:
         cwd = Path(tmp)
-        init = self._run(cwd, "init", "--json")
-        self.assertEqual(init.returncode, 0, init.stdout + init.stderr)
+        (cwd / ".flow").mkdir(parents=True, exist_ok=True)
         (cwd / ".flow" / "config.json").write_text(json.dumps(config),
                                                    encoding="utf-8")
         return cwd
@@ -530,43 +530,6 @@ class Cli(unittest.TestCase):
             out = self._run(cwd, "tracker", "idea", "read", "IDEAS-7")
             self.assertEqual(out.returncode, 9, out.stdout + out.stderr)
             self.assertEqual(json.loads(out.stdout)["class"], "capability")
-
-    def test_spec_is_never_linked_to_an_idea(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = self._repo(tmp, jr_cfg(idea_keys=["IDEAS"]))
-            made = self._run(cwd, "spec", "create", "--title", "Child", "--json")
-            self.assertEqual(made.returncode, 0, made.stdout + made.stderr)
-            spec_id = json.loads(made.stdout)["id"]
-            linked_out = self._run(cwd, "sync", "set-tracker-id", spec_id,
-                                   IDEA_ID, "--identifier", "IDEAS-7", "--json")
-            self.assertNotEqual(linked_out.returncode, 0)
-            self.assertIn("idea", linked_out.stdout.lower())
-            self.assertIn("idea-intake.md", linked_out.stdout)
-            tracker = json.loads((cwd / ".flow" / "specs" / f"{spec_id}.json")
-                                 .read_text(encoding="utf-8"))["tracker"]
-            self.assertIsNone(tracker.get("id"))
-            minted = self._run(cwd, "spec", "create", "--title", "Minted",
-                               "--tracker-first", "--tracker-identifier",
-                               "IDEAS-7", "--json")
-            self.assertNotEqual(minted.returncode, 0)
-            # A stored idea identifier cannot be completed into a link either.
-            (cwd / ".flow" / "config.json").write_text(json.dumps(jr_cfg()),
-                                                       encoding="utf-8")
-            stored = self._run(cwd, "spec", "create", "--title", "Old",
-                               "--tracker-first", "--tracker-identifier",
-                               "IDEAS-7", "--json")
-            self.assertEqual(stored.returncode, 0, stored.stdout + stored.stderr)
-            (cwd / ".flow" / "config.json").write_text(
-                json.dumps(jr_cfg(idea_keys=["IDEAS"])), encoding="utf-8")
-            completed = self._run(cwd, "sync", "set-tracker-id",
-                                  json.loads(stored.stdout)["id"], IDEA_ID,
-                                  "--json")
-            self.assertNotEqual(completed.returncode, 0,
-                                completed.stdout + completed.stderr)
-            # A delivery issue still links as before.
-            ok_link = self._run(cwd, "sync", "set-tracker-id", spec_id,
-                                "10012", "--identifier", "PROJ-12", "--json")
-            self.assertEqual(ok_link.returncode, 0, ok_link.stdout + ok_link.stderr)
 
 
 def _search_jql(request) -> str:
@@ -812,18 +775,15 @@ class MovedIssueIsRefused(unittest.TestCase):
 
     def test_relation_with_a_moved_end_writes_nothing(self) -> None:
         from flowctl_tracker import relate as R  # noqa: PLC0415
-        for many in (False, True):
-            with tempfile.TemporaryDirectory() as tmp:
-                flow = Path(tmp) / ".flow"
-                _linked_spec(flow, "fn-1-a", "10011", "PROJ-11")
-                _linked_spec(flow, "fn-2-b", IDEA_ID, "PROJ-7")
-                (flow / "config.json").write_text(
-                    json.dumps(jr_cfg(idea_keys=["IDEAS"])), encoding="utf-8")
-                ex = self._jira()
-                out = (R.relate_many(flow, "fn-1-a", ["fn-2-b"], event="plan",
-                                     execute=ex)[0] if many else
-                       R.relate(flow, "fn-1-a", blocked_by="fn-2-b", execute=ex))
-            self.assert_refused(out, ex, f"relate many={many}")
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _linked_spec(flow, "fn-1-a", "10011", "PROJ-11")
+            _linked_spec(flow, "fn-2-b", IDEA_ID, "PROJ-7")
+            (flow / "config.json").write_text(
+                json.dumps(jr_cfg(idea_keys=["IDEAS"])), encoding="utf-8")
+            ex = self._jira()
+            out = R.relate(flow, "fn-1-a", blocked_by="fn-2-b", execute=ex)
+        self.assert_refused(out, ex, "relate")
 
     def test_unready_refuses_a_moved_issue_after_its_read(self) -> None:
         config = jr_cfg(idea_keys=["IDEAS"])
@@ -843,36 +803,6 @@ class MovedIssueIsRefused(unittest.TestCase):
         self.assertIsInstance(out, TrackerError)
         self.assertEqual(out.subtype, "idea_read_only")
         self.assertEqual(ex.calls, [])
-
-
-class SpecLinkRefusal(unittest.TestCase):
-    """fn-334 R4: any case of an idea key, and a durable id given alone."""
-
-    _run = Cli._run
-    _repo = Cli._repo
-
-    def test_lowercase_key_and_id_alone_are_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = self._repo(tmp, jr_cfg(idea_keys=["IDEAS"]))
-            made = self._run(cwd, "spec", "create", "--title", "Child", "--json")
-            spec_id = json.loads(made.stdout)["id"]
-            lower = self._run(cwd, "sync", "set-tracker-id", spec_id, IDEA_ID,
-                              "--identifier", "ideas-7", "--json")
-            self.assertNotEqual(lower.returncode, 0, lower.stdout)
-            self.assertIn("idea-intake.md", lower.stdout)
-            alone = self._run(cwd, "sync", "set-tracker-id", spec_id, IDEA_ID,
-                              "--json")
-            self.assertNotEqual(alone.returncode, 0, alone.stdout)
-            self.assertIn("--identifier", alone.stdout)
-            tracker = json.loads((cwd / ".flow" / "specs" / f"{spec_id}.json")
-                                 .read_text(encoding="utf-8"))["tracker"]
-            self.assertIsNone(tracker.get("id"))
-            # Without an idea source a durable id alone still links.
-            (cwd / ".flow" / "config.json").write_text(json.dumps(jr_cfg()),
-                                                       encoding="utf-8")
-            plain = self._run(cwd, "sync", "set-tracker-id", spec_id, "10012",
-                              "--json")
-            self.assertEqual(plain.returncode, 0, plain.stdout + plain.stderr)
 
 
 class ColourTagsLeaveCodeAlone(unittest.TestCase):

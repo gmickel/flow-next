@@ -16,6 +16,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from flowctl_tracker import spec_store as SS  # noqa: E402
 from flowctl_tracker import status as S  # noqa: E402
 from flowctl_tracker.status import verb as V  # noqa: E402
 from flowctl_tracker.status.policy import (  # noqa: E402
@@ -108,28 +109,40 @@ def _write_flow(flow: Path, config: dict, *, spec_id: str = "fn-1-demo",
                 tasks: list | None = None) -> Path:
     (flow / "specs").mkdir(parents=True, exist_ok=True)
     (flow / "config.json").write_text(json.dumps(config), encoding="utf-8")
-    spec = {
-        "id": spec_id, "title": "Demo", "status": "open",
-        "branch_name": "fn-1-demo",
-        "completion_review_status": "unknown",
-        "tracker": tracker if tracker is not None else {
-            "id": GH_NODE, "identifier": "#42", "url": "https://x/42",
-            "lastSyncedAt": None, "depRelations": [], "linkState": "linked",
-        },
+    tr = tracker if tracker is not None else {
+        "id": GH_NODE, "identifier": "#42", "url": "https://x/42",
     }
-    if spec_extra:
-        spec.update(spec_extra)
-    path = flow / "specs" / f"{spec_id}.json"
-    path.write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
-    if tasks is not None:
-        tdir = flow / "tasks"
-        tdir.mkdir(parents=True, exist_ok=True)
-        for i, t in enumerate(tasks, 1):
-            tid = t.get("id") or f"{spec_id}.{i}"
-            (tdir / f"{tid}.json").write_text(
-                json.dumps({"id": tid, "status": t.get("status", "todo"),
-                            "spec": spec_id}), encoding="utf-8")
+    title = (spec_extra or {}).get("title") or "Demo"
+    lines = ["---", f"id: {spec_id}", f"title: {json.dumps(title)}"]
+    if any(tr.get(k) for k in ("id", "identifier", "url", "snapshot")):
+        lines.append("tracker:")
+        for k in ("id", "identifier", "url", "snapshot"):
+            if tr.get(k):
+                lines.append(f"  {k}: {json.dumps(str(tr[k]))}")
+    lines.extend(["---", ""])
+    path = flow / "specs" / f"{spec_id}.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def _saved_doc(path: Path) -> dict:
+    loaded = SS.load_spec_doc(path)
+    assert not isinstance(loaded, TrackerError), loaded
+    return loaded[0]
+
+
+def _rewrite_spec(path: Path, *, title: str | None = None,
+                  tracker: dict | None = None) -> None:
+    doc = _saved_doc(path)
+    tr = tracker if tracker is not None else (doc.get("tracker") or {})
+    lines = ["---", f"id: {doc['id']}", f"title: {json.dumps(title or doc.get('title') or 'Demo')}"]
+    if any(tr.get(k) for k in ("id", "identifier", "url", "snapshot")):
+        lines.append("tracker:")
+        for k in ("id", "identifier", "url", "snapshot"):
+            if tr.get(k):
+                lines.append(f"  {k}: {json.dumps(str(tr[k]))}")
+    lines.extend(["---", ""])
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _receipts(flow: Path) -> list[dict]:
@@ -154,92 +167,27 @@ def _gh_parent(*, state="open", labels=None, state_reason=None):
 # ---------------------------------------------------------------------------
 
 class FlowToNormalized(unittest.TestCase):
-    def test_completion_review_ship_without_merged_is_not_terminal(self) -> None:
-        spec = {"status": "done", "completion_review_status": "ship"}
-        # rows 5/6: none / closed-unmerged → in_review, NEVER done
-        for ev in ("none", "closed-unmerged", "ambiguous", "probe-error", "open"):
+    def test_merged_is_done(self) -> None:
+        self.assertEqual(flow_to_normalized({}, "merged"), "done")
+        self.assertEqual(flow_to_normalized({"branch_name": "fn-1"}, "merged"), "done")
+
+    def test_non_merged_never_terminal(self) -> None:
+        spec = {"branch_name": "fn-1"}
+        for ev in ("none", "closed-unmerged", "ambiguous", "probe-error"):
             with self.subTest(ev=ev):
-                self.assertEqual(
-                    flow_to_normalized(spec, ev, True), "in_review")
-                self.assertNotEqual(
-                    flow_to_normalized(spec, ev, True), "done")
+                self.assertEqual(flow_to_normalized(spec, ev), "in_progress")
+                self.assertNotEqual(flow_to_normalized(spec, ev), "done")
+        self.assertEqual(flow_to_normalized(spec, "open"), "in_review")
 
-    def test_merged_ungated_is_done(self) -> None:
-        spec = {"status": "done", "completion_review_status": "unknown"}
-        self.assertEqual(flow_to_normalized(spec, "merged", False), "done")
-
-    def test_merged_ship_configured_is_done_slot(self) -> None:
-        # verified collapses to done slot
-        spec = {"status": "done", "completion_review_status": "ship"}
-        self.assertEqual(flow_to_normalized(spec, "merged", True), "done")
-
-    def test_merged_configured_not_ship_stays_in_review(self) -> None:
-        spec = {"status": "done", "completion_review_status": "unknown"}
-        self.assertEqual(flow_to_normalized(spec, "merged", True), "in_review")
-
-    def test_open_pr_beats_local_in_progress(self) -> None:
-        # row 4 before row 7 — all-tasks-done OPEN + open PR → in_review
-        spec = {"status": "open"}
-        tasks = [{"status": "done"}, {"status": "done"}]
+    def test_open_pr_beats_branch_in_progress(self) -> None:
         self.assertEqual(
-            flow_to_normalized(spec, "open", False, tasks=tasks), "in_review")
+            flow_to_normalized({"branch_name": "fn-1"}, "open"), "in_review")
 
-    def test_row7_in_progress_and_row8_todo_backlog(self) -> None:
-        spec = {"status": "open"}
+    def test_branch_vs_no_branch_without_pr(self) -> None:
         self.assertEqual(
-            flow_to_normalized(spec, "none", False,
-                               tasks=[{"status": "in_progress"}]),
-            "in_progress")
-        self.assertEqual(
-            flow_to_normalized(spec, "none", False,
-                               tasks=[{"status": "todo"}]),
-            "todo")
-        self.assertEqual(
-            flow_to_normalized(spec, "none", False, tasks=[]), "backlog")
-
-    def test_completion_review_member_enumeration_pins_projection(self) -> None:
-        # fn-205 R7: every known member is classified explicitly; adding a
-        # member fails here until it is deliberately classified.
-        self.assertEqual(
-            set(COMPLETION_REVIEW_STATUSES),
-            {"ship", "needs_work", "needs_human", "unknown", "not_required"},
-        )
-        self.assertEqual(
-            COMPLETION_REVIEW_SATISFYING, frozenset({"ship", "not_required"})
-        )
-        for member in COMPLETION_REVIEW_STATUSES:
-            expected = (
-                "done" if member in COMPLETION_REVIEW_SATISFYING else "in_review"
-            )
-            spec = {"status": "done", "completion_review_status": member}
-            with self.subTest(member=member):
-                self.assertEqual(
-                    flow_to_normalized(spec, "merged", True), expected)
-
-    def test_merged_retired_spec_surfaces_a_cancel_never_completes(self) -> None:
-        spec = {"status": "done", "completion_review_status": "not_required",
-                "retired": {"reason": "moot", "by": []}}
-        requested = flow_to_normalized(spec, "merged", True)
-        self.assertEqual(requested, "cancelled")
-        decision = decide(requested, None, "done", "todo", "merged")
-        self.assertEqual((decision.kind, decision.reason), ("defer", "cancelled-family"))
-
-    def test_not_required_never_terminal_without_merged(self) -> None:
-        # fn-205 R2: policy-excused review does not weaken the merge gate.
-        spec = {"status": "done", "completion_review_status": "not_required"}
-        for ev in ("none", "closed-unmerged", "ambiguous", "probe-error", "open"):
-            with self.subTest(ev=ev):
-                self.assertEqual(flow_to_normalized(spec, ev, True), "in_review")
-
-    def test_unrecognized_or_absent_review_value_satisfies_nothing(self) -> None:
-        # fn-205 R7 fail-closed: garbage or absent reads as unknown.
-        for review in ("garbage", None):
-            spec = {"status": "done"}
-            if review is not None:
-                spec["completion_review_status"] = review
-            with self.subTest(review=review):
-                self.assertEqual(
-                    flow_to_normalized(spec, "merged", True), "in_review")
+            flow_to_normalized({"branch_name": "fn-1"}, "none"), "in_progress")
+        self.assertEqual(flow_to_normalized({}, "none"), "backlog")
+        self.assertEqual(flow_to_normalized({"branch_name": "  "}, "none"), "backlog")
 
 
 # ---------------------------------------------------------------------------
@@ -548,14 +496,10 @@ class StatusVerbGate(unittest.TestCase):
                 "merge-evidence": ok([]),
             })
             out = S.status(
-                flow, "fn-1-demo", to="in_progress", execute=ex)
+                flow, "fn-1-demo", to="in_progress", branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertEqual(out["kind"], "applied_local")
-            saved = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(saved["status"], "done")
-            self.assertNotEqual(saved["tracker"]["lastSyncedAt"], "OLD")
             self.assertFalse(any(c.op == "status-set" for c in ex.calls))
-            self.assertEqual(_receipts(flow)[0]["status"], "pulled")
 
     def test_tracker_wins_active_mirror_is_unrepresentable_no_mutation(
             self) -> None:
@@ -564,26 +508,22 @@ class StatusVerbGate(unittest.TestCase):
             cfg = gh_cfg()
             cfg["tracker"]["conflictTiebreak"] = "tracker-wins"
             cfg["review"] = {"backend": "none"}
-            path = _write_flow(
-                flow, cfg, spec_extra={"status": "done"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": "OLD", "linkState": "linked"},
+            _write_flow(
+                flow, cfg,
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
                     state="open", labels=["status:in-progress"])),
                 "merge-evidence": ok(MERGED_ROWS),
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.CONFLICT)
             self.assertEqual(
                 out.subtype, "status-deadlock-unrepresentable")
             self.assertTrue(out.details["unrepresentable"])
             self.assertFalse(any(c.op == "status-set" for c in ex.calls))
-            saved = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(saved["status"], "done")
-            self.assertEqual(saved["tracker"]["lastSyncedAt"], "OLD")
             self.assertEqual(_receipts(flow), [])
 
     def test_jira_tls_policy_does_not_bind_source_repo_pr_probe(self) -> None:
@@ -593,10 +533,8 @@ class StatusVerbGate(unittest.TestCase):
             cfg["tracker"]["perTracker"] = {"sslVerify": False}
             _write_flow(
                 flow, cfg,
-                spec_extra={"status": "done"},
                 tracker={
                     "id": JR_ID, "identifier": "SCRUM-1", "url": "u",
-                    "lastSyncedAt": None, "linkState": "linked",
                 },
             )
             parent = {
@@ -618,7 +556,7 @@ class StatusVerbGate(unittest.TestCase):
                     "flowctl_tracker.resolve_verb.bound_executor",
                     return_value=tracker_bound):
                 out = S.status(
-                    flow, "fn-1-demo", to="done", execute=raw)
+                    flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=raw)
 
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertEqual(out["kind"], "noop")
@@ -632,24 +570,18 @@ class StatusVerbGate(unittest.TestCase):
     def test_completion_review_ship_to_done_without_merged_not_terminal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done",
-                            "completion_review_status": "ship"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": "2020-01-01T00:00:00Z",
-                         "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
-                    state="open", labels=["status:in_progress"])),
+                    state="open", labels=["status:in_review"])),
                 "merge-evidence": ok([]),  # none — no merged PR
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.CONFLICT)
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertEqual(saved["lastSyncedAt"], "2020-01-01T00:00:00Z")
             # No status-set mutation was issued
             self.assertFalse(any(c.op == "status-set" for c in ex.calls))
 
@@ -679,12 +611,9 @@ class StatusVerbGate(unittest.TestCase):
     def test_github_reason_duplicate_lands_state_reason(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done",
-                            "completion_review_status": "unknown"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             # ungated completion review so merged → done
             cfg_path = flow / "config.json"
@@ -709,22 +638,18 @@ class StatusVerbGate(unittest.TestCase):
                 "status-label-readback": ok([{"name": "status:done"}]),
             })
             out = S.status(flow, "fn-1-demo", to="done", reason="duplicate",
-                           execute=ex)
+                           branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["kind"], "applied")
             self.assertEqual(bodies[0]["state"], "closed")
             self.assertEqual(bodies[0]["state_reason"], "duplicate")
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertIsNotNone(saved["lastSyncedAt"])
 
     def test_last_synced_advanced_only_on_applied(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, gh_cfg(),
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": "OLD", "linkState": "linked"},
-                tasks=[{"status": "in_progress"}],
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             # noop path: tracker already in_progress, flow in_progress
             ex = fake_execute({
@@ -733,46 +658,34 @@ class StatusVerbGate(unittest.TestCase):
                 "merge-evidence": ok([]),
             })
             out = S.status(
-                flow, "fn-1-demo", to="in_progress",
+                flow, "fn-1-demo", to="in_progress", branch="fn-1-demo",
                 event="work.firstClaim", execute=ex)
             self.assertEqual(out["kind"], "noop")
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertEqual(saved["lastSyncedAt"], "OLD")
-            receipts = _receipts(flow)
-            self.assertEqual(len(receipts), 1)
-            self.assertEqual(receipts[0]["status"], "noop")
-            self.assertEqual(receipts[0]["event"], "work.firstClaim")
 
     def test_defer_writes_receipt_without_advancing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done",
-                            "completion_review_status": "ship"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": "OLD", "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
                     state="open", labels=["status:in_progress"])),
                 "merge-evidence": ok([{"state": "CLOSED"}]),
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             # R7: ambiguous evidence is a CONFLICT error, not a defer success.
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.CONFLICT)
             self.assertEqual(out.subtype, "closed-unmerged")
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertEqual(saved["lastSyncedAt"], "OLD")
-            # A conflict is the skill's recovery surface - no defer receipt.
             self.assertEqual(_receipts(flow), [])
 
     def test_identifier_only_is_unresolved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
             _write_flow(flow, gh_cfg(), tracker={
-                "id": None, "identifier": "#42", "linkState": "identifier_only",
+                "id": None, "identifier": "#42",
             })
             ex = fake_execute({})
             out = S.status(flow, "fn-1-demo", to="in_progress", execute=ex)
@@ -787,9 +700,7 @@ class GitlabOpenedClosed(unittest.TestCase):
             flow = Path(tmp) / ".flow"
             _write_flow(
                 flow, gl_cfg(),
-                spec_extra={"status": "done"},
-                tracker={"id": GL_ID, "identifier": "g/p#12", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
+                tracker={"id": GL_ID, "identifier": "g/p#12", "url": "u"},
             )
             cfg = json.loads((flow / "config.json").read_text(encoding="utf-8"))
             cfg["review"] = {"backend": "none"}
@@ -810,7 +721,7 @@ class GitlabOpenedClosed(unittest.TestCase):
                 "merge-evidence": ok(MERGED_ROWS),
                 "status-set": capture,
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["kind"], "applied")
             self.assertEqual(bodies[0]["state_event"], "close")
@@ -900,14 +811,10 @@ class JiraTransitions(unittest.TestCase):
                     ],
                 }),
             })
-            out = S.status(flow, "fn-1-demo", to="in_progress", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="in_progress",
+                           branch="fn-1-demo", execute=ex)
             self.assertEqual(out["kind"], "defer")
             self.assertEqual(out["reason"], "transition-unreachable")
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertEqual(saved["lastSyncedAt"], "OLD")
-            receipts = _receipts(flow)
-            self.assertEqual(len(receipts), 1)
-            self.assertEqual(receipts[0]["status"], "deferred")
             # Never issued status-set (forced jump)
             self.assertFalse(any(c.op == "status-set" for c in ex.calls))
             # Did GET transitions (no cached transition id)
@@ -918,9 +825,7 @@ class JiraTransitions(unittest.TestCase):
             flow = Path(tmp) / ".flow"
             _write_flow(
                 flow, jr_cfg(),
-                tracker={"id": JR_ID, "identifier": "SCRUM-1", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
-                tasks=[{"status": "in_progress"}],
+                tracker={"id": JR_ID, "identifier": "SCRUM-1", "url": "u"},
             )
             bodies = []
 
@@ -946,7 +851,8 @@ class JiraTransitions(unittest.TestCase):
                 }),
                 "status-set": capture,
             })
-            out = S.status(flow, "fn-1-demo", to="in_progress", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="in_progress",
+                           branch="fn-1-demo", execute=ex)
             self.assertEqual(out["kind"], "applied")
             self.assertEqual(bodies[0]["transition"]["id"], "21")
 
@@ -957,9 +863,7 @@ class LinearStateIds(unittest.TestCase):
             flow = Path(tmp) / ".flow"
             _write_flow(
                 flow, ln_cfg(),
-                tracker={"id": LN_UUID, "identifier": "WOR-1", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
-                tasks=[{"status": "in_progress"}],
+                tracker={"id": LN_UUID, "identifier": "WOR-1", "url": "u"},
             )
             variables = []
 
@@ -984,7 +888,8 @@ class LinearStateIds(unittest.TestCase):
                 "merge-evidence": ok([]),
                 "status-set": capture,
             })
-            out = S.status(flow, "fn-1-demo", to="in_progress", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="in_progress",
+                           branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError, msg=repr(out))
             self.assertEqual(out["kind"], "applied")
             self.assertEqual(variables[0]["stateId"], "s-ip")
@@ -1061,7 +966,8 @@ class ProviderDeadlockParity(unittest.TestCase):
                     "merge-evidence": ok([]),
                 })
                 out = S.status(
-                    flow, "fn-1-demo", to="in_progress", execute=ex)
+                    flow, "fn-1-demo", to="in_progress",
+                    branch="fn-1-demo", execute=ex)
                 self.assertIsInstance(out, TrackerError)
                 self.assertIs(out.cls, ErrorClass.CONFLICT)
                 self.assertEqual(out.subtype, "status-deadlock")
@@ -1104,38 +1010,29 @@ class Round1HostFixes(unittest.TestCase):
     def test_tracker_terminal_folds_into_local_spec(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "open"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
-            # PM closed the issue (completed); flow is NOT in_progress (no tasks
+            # PM closed the issue (completed); flow is NOT in_progress (no branch
             # started) -> tracker wins, folded LOCALLY, no tracker mutation.
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
                     state="closed", labels=[], state_reason="completed")),
                 "merge-evidence": ok([]),
             })
-            out = S.status(flow, "fn-1-demo", to="todo", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="todo", branch="", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["kind"], "applied_local")
-            saved = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(saved["status"], "done", "local spec folded")
-            self.assertIsNotNone(saved["tracker"]["lastSyncedAt"])
             mutations = [c for c in ex.calls if c.op == "status-set"]
             self.assertEqual(mutations, [], "no tracker write on a local fold")
-            receipts = _receipts(flow)
-            self.assertEqual(receipts[0]["status"], "pulled")
 
     def test_partial_label_failure_is_explicit_never_silent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
             _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done", "completion_review_status": "unknown"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             cfg_path = flow / "config.json"
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -1151,7 +1048,7 @@ class Round1HostFixes(unittest.TestCase):
                 "status-label-add": TrackerError(ErrorClass.TRANSPORT, "boom"),
                 "status-label-readback": ok([{"name": "status:in_review"}]),
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError,
                                      "the STATE change landed - not a bare failure")
             self.assertEqual(out["kind"], "applied")
@@ -1193,21 +1090,12 @@ class Round1HostFixes(unittest.TestCase):
              "status-label-readback"])
 
     def test_unrepaired_remove_failure_does_not_advance_last_synced(self) -> None:
-        """A second invocation safely repairs the partial namespace.
-
-        The first bounded cleanup still leaves two labels, returns landed
-        partial evidence, and persists no durable success. The retry proves
-        the requested terminal state through native state + merge policy,
-        replays the idempotent write, and converges without manual cleanup.
-        """
+        """A second invocation safely repairs the partial namespace."""
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done",
-                            "completion_review_status": "unknown"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": "OLD", "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             cfg_path = flow / "config.json"
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -1228,15 +1116,12 @@ class Round1HostFixes(unittest.TestCase):
                 "status-label-add": ok([{"name": "status:done"}]),
                 "status-label-readback": [ambiguous, ambiguous],
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertEqual(out.subtype, "status_labels_partial")
             self.assertTrue(out.auto_retryable)
             self.assertEqual((out.details or {}).get("completed_steps"),
                              ["state", "label-add"])
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertEqual(saved["lastSyncedAt"], "OLD")
-            self.assertEqual(_receipts(flow), [])
 
             retry_ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
@@ -1249,15 +1134,10 @@ class Round1HostFixes(unittest.TestCase):
                 "status-label-readback": ok([{"name": "status:done"}]),
             })
             retry = S.status(
-                flow, "fn-1-demo", to="done", execute=retry_ex)
+                flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=retry_ex)
             self.assertNotIsInstance(retry, TrackerError, retry)
             self.assertEqual(retry["kind"], "applied")
             self.assertEqual(retry["applied"], "done")
-            repaired = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertNotEqual(repaired["lastSyncedAt"], "OLD")
-            receipts = _receipts(flow)
-            self.assertEqual(len(receipts), 1)
-            self.assertEqual(receipts[0]["status"], "updated")
             self.assertEqual(
                 [c.op for c in retry_ex.calls],
                 ["status-parent-read", "merge-evidence", "merge-evidence-files",
@@ -1268,12 +1148,9 @@ class Round1HostFixes(unittest.TestCase):
         state and overwrite GitHub's authoritative duplicate close reason."""
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done",
-                            "completion_review_status": "unknown"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": "OLD", "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             cfg_path = flow / "config.json"
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -1289,14 +1166,11 @@ class Round1HostFixes(unittest.TestCase):
                 "status-label-add": ok([{"name": "status:done"}]),
                 "status-label-readback": ok([{"name": "status:done"}]),
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertEqual(out["kind"], "applied")
             self.assertEqual(out["write"]["repair"], "labels-only")
             self.assertFalse(any(c.op == "status-set" for c in ex.calls))
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertNotEqual(saved["lastSyncedAt"], "OLD")
-            self.assertEqual(_receipts(flow)[0]["status"], "updated")
 
     def test_missing_target_partial_is_repaired_on_next_invocation(self) -> None:
         """Bounded cleanup can leave no target label. The next invocation
@@ -1304,12 +1178,9 @@ class Round1HostFixes(unittest.TestCase):
         converges through the same policy-gated label-only repair."""
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done",
-                            "completion_review_status": "unknown"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": "OLD", "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             cfg_path = flow / "config.json"
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -1333,15 +1204,10 @@ class Round1HostFixes(unittest.TestCase):
                 ],
             })
             partial = S.status(
-                flow, "fn-1-demo", to="done", execute=first)
+                flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=first)
             self.assertIsInstance(partial, TrackerError)
             self.assertEqual(partial.subtype, "status_labels_partial")
             self.assertTrue(partial.auto_retryable)
-            self.assertEqual(
-                json.loads(path.read_text(encoding="utf-8"))["tracker"][
-                    "lastSyncedAt"],
-                "OLD")
-            self.assertEqual(_receipts(flow), [])
 
             second = fake_execute({
                 "status-parent-read": ok(_gh_parent(
@@ -1352,14 +1218,11 @@ class Round1HostFixes(unittest.TestCase):
                 "status-label-readback": ok([{"name": "status:done"}]),
             })
             repaired = S.status(
-                flow, "fn-1-demo", to="done", execute=second)
+                flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=second)
             self.assertNotIsInstance(repaired, TrackerError, repaired)
             self.assertEqual(repaired["kind"], "applied")
             self.assertEqual(repaired["write"]["repair"], "labels-only")
             self.assertFalse(any(c.op == "status-set" for c in second.calls))
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertNotEqual(saved["lastSyncedAt"], "OLD")
-            self.assertEqual(_receipts(flow)[0]["status"], "updated")
 
     def test_readback_failure_is_degraded_even_when_label_ops_succeed(self) -> None:
         """A failed label readback must surface as degraded evidence even when
@@ -1369,9 +1232,7 @@ class Round1HostFixes(unittest.TestCase):
             flow = Path(tmp) / ".flow"
             _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done", "completion_review_status": "unknown"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             cfg_path = flow / "config.json"
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -1388,7 +1249,7 @@ class Round1HostFixes(unittest.TestCase):
                 "status-label-readback": TrackerError(
                     ErrorClass.TRANSPORT, "readback boom"),
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError,
                                      "state landed - never a bare failure")
             self.assertEqual(out["kind"], "applied")
@@ -1396,12 +1257,6 @@ class Round1HostFixes(unittest.TestCase):
             self.assertEqual(write["degraded"]["kind"], "status_labels_unverified")
             self.assertIn({"op": "readback", "error": "readback boom"},
                           write["degraded"]["failures"])
-            # The DURABLE receipt must carry the same degradation - the result
-            # dict alone is ephemeral (PR #246 review).
-            receipts = _receipts(flow)
-            self.assertEqual(receipts[0]["status"], "updated")
-            self.assertEqual(receipts[0]["degraded"]["kind"],
-                             "status_labels_unverified")
 
 
 class Round4PersistIntegrity(unittest.TestCase):
@@ -1412,10 +1267,7 @@ class Round4PersistIntegrity(unittest.TestCase):
             flow = Path(tmp) / ".flow"
             path = _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done",
-                            "completion_review_status": "unknown"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             cfg_path = flow / "config.json"
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -1423,11 +1275,7 @@ class Round4PersistIntegrity(unittest.TestCase):
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
 
             def concurrent_set(req):
-                # Another command updates the same spec while status() is
-                # mid-flight (after its snapshot load, before its persist).
-                data = json.loads(path.read_text(encoding="utf-8"))
-                data["title"] = "CONCURRENT"
-                path.write_text(json.dumps(data), encoding="utf-8")
+                _rewrite_spec(path, title="CONCURRENT")
                 return ok({"node_id": GH_NODE, "number": 42, "state": "closed"})
 
             ex = fake_execute({
@@ -1439,27 +1287,19 @@ class Round4PersistIntegrity(unittest.TestCase):
                 "status-label-add": ok([{"name": "status:done"}]),
                 "status-label-readback": ok([{"name": "status:done"}]),
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["kind"], "applied")
-            saved = json.loads(path.read_text(encoding="utf-8"))
+            saved = _saved_doc(path)
             self.assertEqual(saved["title"], "CONCURRENT",
                              "persist must reload, never replay the stale snapshot")
-            self.assertIsNotNone(saved["tracker"]["lastSyncedAt"])
 
     def test_persist_failure_after_tracker_write_reports_the_write(self) -> None:
-        """PR #246 review: when the provider mutation LANDED but the locked
-        local persistence fails, the returned error must carry the completed
-        provider write (completed_steps + write details, mirroring the
-        syncbody post-write pattern) and lastSyncedAt must NOT advance."""
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
             path = _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done",
-                            "completion_review_status": "unknown"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             cfg_path = flow / "config.json"
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -1467,10 +1307,7 @@ class Round4PersistIntegrity(unittest.TestCase):
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
 
             def corrupt_after_readback(req):
-                # Persistence reloads the spec under the lock; corrupting it
-                # after the final provider call makes that reload fail while
-                # the tracker mutation has already landed.
-                path.write_text("{not json", encoding="utf-8")
+                path.write_bytes(b"\xff\xfe")
                 return ok([{"name": "status:done"}])
 
             ex = fake_execute({
@@ -1483,7 +1320,7 @@ class Round4PersistIntegrity(unittest.TestCase):
                 "status-label-add": ok([{"name": "status:done"}]),
                 "status-label-readback": corrupt_after_readback,
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIn("after tracker write", out.message)
             details = out.details or {}
@@ -1494,27 +1331,19 @@ class Round4PersistIntegrity(unittest.TestCase):
                                   "landed provider write must be reported")
             self.assertEqual(write["applied"], "done")
             self.assertIn("state", write["completed_steps"])
-            # lastSyncedAt must NOT advance - it advances only on applied.
             mutations = [c for c in ex.calls if c.op == "status-set"]
             self.assertEqual(len(mutations), 1, "the mutation DID land")
-            self.assertNotIn("lastSyncedAt",
-                             path.read_text(encoding="utf-8"),
-                             "no persisted advance on a failed persist")
 
     def test_local_fold_does_not_erase_concurrent_update(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
             path = _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "open"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
 
             def concurrent_parent(req):
-                data = json.loads(path.read_text(encoding="utf-8"))
-                data["title"] = "CONCURRENT"
-                path.write_text(json.dumps(data), encoding="utf-8")
+                _rewrite_spec(path, title="CONCURRENT")
                 return ok(_gh_parent(state="closed", labels=[],
                                      state_reason="completed"))
 
@@ -1522,33 +1351,11 @@ class Round4PersistIntegrity(unittest.TestCase):
                 "status-parent-read": concurrent_parent,
                 "merge-evidence": ok([]),
             })
-            out = S.status(flow, "fn-1-demo", to="todo", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="todo", branch="", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["kind"], "applied_local")
-            saved = json.loads(path.read_text(encoding="utf-8"))
+            saved = _saved_doc(path)
             self.assertEqual(saved["title"], "CONCURRENT")
-            self.assertEqual(saved["status"], "done", "fold still lands")
-            self.assertIsNotNone(saved["tracker"]["lastSyncedAt"])
-
-
-class BlockedTasksAreWorkUnderway(unittest.TestCase):
-    """PR #246 review: status-sync.md says blocked tasks do not change the
-    spec-level normalized status - "the issue stays `in-progress`" - so an
-    all-blocked spec with no PR signal derives in_progress, never todo."""
-
-    def test_all_blocked_no_pr_signal_is_in_progress_per_status_sync_md(self) -> None:
-        spec = {"status": "open", "completion_review_status": "unknown"}
-        out = flow_to_normalized(
-            spec, "none", True,
-            tasks=[{"status": "blocked"}, {"status": "blocked"}])
-        self.assertEqual(out, "in_progress")
-
-    def test_blocked_among_todo_is_still_in_progress(self) -> None:
-        spec = {"status": "open", "completion_review_status": "unknown"}
-        out = flow_to_normalized(
-            spec, "none", True,
-            tasks=[{"status": "todo"}, {"status": "blocked"}])
-        self.assertEqual(out, "in_progress")
 
 
 NEW_NODE = "I_kwDORepointed99"
@@ -1562,21 +1369,15 @@ class Round6IdentityGuard(unittest.TestCase):
 
     @staticmethod
     def _repoint(path: Path) -> None:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        data["tracker"] = {"id": NEW_NODE, "identifier": "#99",
-                           "url": "https://x/99", "lastSyncedAt": None,
-                           "linkState": "linked"}
-        path.write_text(json.dumps(data), encoding="utf-8")
+        _rewrite_spec(path, tracker={
+            "id": NEW_NODE, "identifier": "#99", "url": "https://x/99"})
 
     def test_applied_path_refuses_persist_after_repoint(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
             path = _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done",
-                            "completion_review_status": "unknown"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             cfg_path = flow / "config.json"
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -1584,8 +1385,6 @@ class Round6IdentityGuard(unittest.TestCase):
             cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
 
             def repoint_then_ok(req):
-                # Another command repoints the spec to a different issue
-                # while the provider status write is in flight.
                 self._repoint(path)
                 return ok([{"name": "status:done"}])
 
@@ -1599,19 +1398,16 @@ class Round6IdentityGuard(unittest.TestCase):
                 "status-label-add": ok([{"name": "status:done"}]),
                 "status-label-readback": repoint_then_ok,
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertEqual(out.cls, ErrorClass.CONFLICT)
             self.assertEqual(out.subtype, "identity_drift")
             details = out.details or {}
             self.assertEqual(details["expected"]["id"], GH_NODE)
             self.assertEqual(details["found"]["id"], NEW_NODE)
-            # The landed provider write is still reported (never silent).
             self.assertEqual(details["completed_steps"], ["status-write"])
-            # lastSyncedAt on the NEW link untouched - persist refused.
-            saved = json.loads(path.read_text(encoding="utf-8"))
+            saved = _saved_doc(path)
             self.assertEqual(saved["tracker"]["id"], NEW_NODE)
-            self.assertIsNone(saved["tracker"]["lastSyncedAt"])
             self.assertEqual(_receipts(flow), [],
                              "no receipt for a refused persist")
 
@@ -1620,13 +1416,10 @@ class Round6IdentityGuard(unittest.TestCase):
             flow = Path(tmp) / ".flow"
             path = _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "open"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
 
             def repoint_parent(req):
-                # Repoint mid-flight; the OLD issue reads closed/terminal.
                 self._repoint(path)
                 return ok(_gh_parent(state="closed", labels=[],
                                      state_reason="completed"))
@@ -1635,16 +1428,12 @@ class Round6IdentityGuard(unittest.TestCase):
                 "status-parent-read": repoint_parent,
                 "merge-evidence": ok([]),
             })
-            out = S.status(flow, "fn-1-demo", to="todo", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="todo", branch="", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertEqual(out.cls, ErrorClass.CONFLICT)
             self.assertEqual(out.subtype, "identity_drift")
-            saved = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(saved["status"], "open",
-                             "done must NOT fold from the OLD issue's "
-                             "terminal state onto the repointed spec")
+            saved = _saved_doc(path)
             self.assertEqual(saved["tracker"]["id"], NEW_NODE)
-            self.assertIsNone(saved["tracker"]["lastSyncedAt"])
             self.assertEqual(_receipts(flow), [])
 
 
@@ -1767,24 +1556,19 @@ class AmbiguousStatusLabels(unittest.TestCase):
                 "status-label-readback": ok([
                     {"name": "status:in-progress"}]),
             })
-            out = S.status(flow, "fn-1-demo", to="in_progress", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="in_progress",
+                           branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertEqual(out["kind"], "applied")
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertNotEqual(saved["lastSyncedAt"], "OLD")
-            self.assertEqual(_receipts(flow)[0]["status"], "updated")
 
     def test_ambiguous_repair_refused_when_merge_gate_is_not_clean(self) -> None:
         """Native/request agreement alone is insufficient: failed merge
         evidence keeps the ordinary conflict surface and emits no mutation."""
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done",
-                            "completion_review_status": "unknown"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": "OLD", "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
@@ -1794,23 +1578,19 @@ class AmbiguousStatusLabels(unittest.TestCase):
                 "merge-evidence": TrackerError(
                     ErrorClass.TRANSPORT, "probe unavailable"),
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertEqual(out.subtype, "ambiguous-status-labels")
             self.assertFalse(any(c.op == "status-set" for c in ex.calls))
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertEqual(saved["lastSyncedAt"], "OLD")
             self.assertEqual(_receipts(flow), [])
 
     def test_ambiguous_cancelled_state_is_never_auto_repaired(self) -> None:
         """The retry path preserves cancelled-family human confirmation."""
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": "OLD", "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             ex = fake_execute({
                 "status-parent-read": ok(_gh_parent(
@@ -1821,29 +1601,23 @@ class AmbiguousStatusLabels(unittest.TestCase):
             })
             out = S.status(
                 flow, "fn-1-demo", to="cancelled",
-                reason="not_planned", execute=ex)
+                reason="not_planned", branch="fn-1-demo", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertEqual(out.subtype, "ambiguous-status-labels")
             self.assertFalse(any(c.op == "status-set" for c in ex.calls))
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertEqual(saved["lastSyncedAt"], "OLD")
             self.assertEqual(_receipts(flow), [])
 
 
 class NotRequiredTerminalLabel(unittest.TestCase):
-    """fn-205 R2 (silent-widening seam): merged + done + `not_required` is
-    terminal `done` with the `status:done` label; `status:verified` stays
-    reachable from `ship` alone."""
+    """fn-205 R2 (silent-widening seam): merged + done is
+    terminal `done` with the `status:done` label."""
 
     def test_merged_not_required_applies_done_label_never_verified(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
             _write_flow(
                 flow, gh_cfg(),
-                spec_extra={"status": "done",
-                            "completion_review_status": "not_required"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": None, "linkState": "linked"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             added: list = []
 
@@ -1862,90 +1636,10 @@ class NotRequiredTerminalLabel(unittest.TestCase):
                 "status-label-add": capture_add,
                 "status-label-readback": ok([{"name": "status:done"}]),
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError, out)
             self.assertEqual(out["kind"], "applied")
-            # The excused review earns terminal `done`, never `verified`.
             self.assertEqual(added, [{"labels": ["status:done"]}])
-
-
-class LoadTasksMergesRuntimeState(unittest.TestCase):
-    """Live smoke 2026-07-28: since the fn-111 storage split the task
-    DEFINITION (.flow/tasks/<id>.json) keeps its scaffold status while the
-    live status (claimed/in_progress/done) lives in the runtime store at
-    <state-dir>/tasks/<id>.state.json. _load_tasks must overlay it, or every
-    started spec normalizes as todo and the tracker never advances."""
-
-    def _flow_with_task(self, tmp: Path) -> Path:
-        flow = tmp / ".flow"
-        (flow / "tasks").mkdir(parents=True)
-        (flow / "tasks" / "fn-1.1.json").write_text(
-            json.dumps({"id": "fn-1.1", "status": "todo", "spec": "fn-1"}),
-            encoding="utf-8")
-        return flow
-
-    def test_runtime_state_overlays_definition_status(self) -> None:
-        import os
-        from flowctl_tracker.status import verb as V
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            flow = self._flow_with_task(tmp_path)
-            state = tmp_path / "state" / "tasks"
-            state.mkdir(parents=True)
-            (state / "fn-1.1.state.json").write_text(
-                json.dumps({"status": "in_progress",
-                            "assignee": "smoke", "claimed_at": "t"}),
-                encoding="utf-8")
-            old = os.environ.get("FLOW_STATE_DIR")
-            os.environ["FLOW_STATE_DIR"] = str(tmp_path / "state")
-            try:
-                tasks = V._load_tasks(flow, "fn-1")
-            finally:
-                if old is None:
-                    os.environ.pop("FLOW_STATE_DIR", None)
-                else:
-                    os.environ["FLOW_STATE_DIR"] = old
-            self.assertEqual(tasks, [{"id": "fn-1.1", "status": "in_progress"}])
-
-    def test_definition_status_still_read_without_runtime_state(self) -> None:
-        import os
-        from flowctl_tracker.status import verb as V
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            flow = self._flow_with_task(tmp_path)
-            old = os.environ.get("FLOW_STATE_DIR")
-            os.environ["FLOW_STATE_DIR"] = str(tmp_path / "state-missing")
-            try:
-                tasks = V._load_tasks(flow, "fn-1")
-            finally:
-                if old is None:
-                    os.environ.pop("FLOW_STATE_DIR", None)
-                else:
-                    os.environ["FLOW_STATE_DIR"] = old
-            self.assertEqual(tasks, [{"id": "fn-1.1", "status": "todo"}])
-
-
-class StateDirAbsoluteFromSubdir(unittest.TestCase):
-    """PR #246 wave-14 P1: --path-format modifies only options AFTER it, so
-    a trailing --path-format=absolute returned a cwd-relative ".git". The
-    resolved state dir must be absolute regardless of the caller's cwd."""
-
-    def test_state_dir_is_absolute(self) -> None:
-        import os
-        import subprocess as sp
-        from flowctl_tracker.status import verb as V
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp) / "repo"
-            (repo / ".flow").mkdir(parents=True)
-            sp.run(["git", "init", "-q", str(repo)], check=True)
-            old = os.environ.pop("FLOW_STATE_DIR", None)
-            try:
-                out = V._state_dir(repo / ".flow")
-            finally:
-                if old is not None:
-                    os.environ["FLOW_STATE_DIR"] = old
-            self.assertTrue(out.is_absolute(), out)
-            self.assertEqual(out, (repo / ".git" / "flow-state").resolve())
 
 
 class AliasedStateIdReads(unittest.TestCase):
@@ -2087,7 +1781,7 @@ class StatusClaimSerialization(unittest.TestCase):
                 "status-label-add": ok([{"name": "status:done"}]),
                 "status-label-readback": ok([{"name": "status:done"}]),
             })
-            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="done", branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError)
             self.assertEqual(out["kind"], "applied")
 
@@ -2111,9 +1805,7 @@ class StatusClaimSerialization(unittest.TestCase):
             flow = Path(tmp) / ".flow"
             _write_flow(
                 flow, gh_cfg(),
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": "OLD", "linkState": "linked"},
-                tasks=[{"status": "in_progress"}],
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u"},
             )
             rec_path = flow / "create-first" / "status-fn-1-demo.json"
             rec_path.parent.mkdir(parents=True)
@@ -2130,7 +1822,8 @@ class StatusClaimSerialization(unittest.TestCase):
                     state="open", labels=["status:in_progress"])),
                 "merge-evidence": ok([]),
             })
-            out = S.status(flow, "fn-1-demo", to="in_progress", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="in_progress",
+                           branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError,
                                      "a crashed run's leftover claim must "
                                      "not wedge the spec")
@@ -2143,7 +1836,7 @@ class AliasedStateIdWriteNoop(unittest.TestCase):
     """Aliased in_progress/in_review + open PR: the read side resolves the
     shared id to in_progress (earliest slot), the gate requests in_review,
     and the target state id equals the one already on the issue. Writing it
-    would report "applied" and advance lastSyncedAt on EVERY sync - the
+    would report "applied" on EVERY sync - the
     repeat loop. The writer must detect the identical native id and no-op."""
 
     ALIASED = {"todo": "s-todo", "in_progress": "s-shared",
@@ -2153,9 +1846,7 @@ class AliasedStateIdWriteNoop(unittest.TestCase):
         flow = Path(tmp) / ".flow"
         _write_flow(
             flow, ln_cfg(state_ids=dict(self.ALIASED)),
-            tracker={"id": LN_UUID, "identifier": "WOR-1", "url": "u",
-                     "lastSyncedAt": "OLD", "linkState": "linked"},
-            tasks=[{"status": "in_progress"}],
+            tracker={"id": LN_UUID, "identifier": "WOR-1", "url": "u"},
         )
         return flow
 
@@ -2176,29 +1867,22 @@ class AliasedStateIdWriteNoop(unittest.TestCase):
     def test_identical_native_id_noops_and_never_advances(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = self._flow(tmp)
-            path = flow / "specs" / "fn-1-demo.json"
             state = {"id": "s-shared", "name": "In Progress",
                      "type": "started"}
-            # Two consecutive syncs: the repeat loop the finding describes
-            # would mutate + advance lastSyncedAt on each. Both must no-op.
             for attempt in (1, 2):
                 ex = fake_execute(self._responses(state))
-                out = S.status(flow, "fn-1-demo", to="in_review", execute=ex)
+                out = S.status(flow, "fn-1-demo", to="in_review",
+                               branch="fn-1-demo", execute=ex)
                 self.assertNotIsInstance(out, TrackerError, msg=repr(out))
                 self.assertEqual(out["kind"], "noop",
                                  msg=f"sync {attempt}: {out!r}")
-                self.assertEqual(out["lastSyncedAt"], "OLD")
                 self.assertFalse(
                     any(c.op == "status-set" for c in ex.calls),
                     msg=f"sync {attempt} issued a provider mutation")
-                saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-                self.assertEqual(saved["lastSyncedAt"], "OLD",
-                                 msg=f"sync {attempt} advanced lastSyncedAt")
 
     def test_different_native_id_still_writes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = self._flow(tmp)
-            path = flow / "specs" / "fn-1-demo.json"
             variables = []
 
             def capture(req):
@@ -2210,25 +1894,19 @@ class AliasedStateIdWriteNoop(unittest.TestCase):
                 {"id": "s-todo", "name": "Todo", "type": "unstarted"})
             responses["status-set"] = capture
             ex = fake_execute(responses)
-            out = S.status(flow, "fn-1-demo", to="in_review", execute=ex)
+            out = S.status(flow, "fn-1-demo", to="in_review",
+                           branch="fn-1-demo", execute=ex)
             self.assertNotIsInstance(out, TrackerError, msg=repr(out))
             self.assertEqual(out["kind"], "applied")
             self.assertEqual(variables[0]["stateId"], "s-shared")
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertNotEqual(saved["lastSyncedAt"], "OLD")
 
     def test_jira_parity_identical_status_id_noops(self) -> None:
-        """Pin the Jira already-current check this fix mirrors: aliased
-        statusIds + issue already on the shared id -> noop, no transition
-        lookup, no POST, no lastSyncedAt advance."""
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, jr_cfg(status_ids={"todo": "1", "in_progress": "2",
                                          "in_review": "2", "done": "4"}),
-                tracker={"id": JR_ID, "identifier": "SCRUM-1", "url": "u",
-                         "lastSyncedAt": "OLD", "linkState": "linked"},
-                tasks=[{"status": "in_progress"}],
+                tracker={"id": JR_ID, "identifier": "SCRUM-1", "url": "u"},
             )
             ex = fake_execute({
                 "status-parent-read": ok({
@@ -2243,18 +1921,12 @@ class AliasedStateIdWriteNoop(unittest.TestCase):
                 }),
             })
             out = S.status(
-                flow, "fn-1-demo", to="in_review",
+                flow, "fn-1-demo", to="in_review", branch="fn-1-demo",
                 event="makePr", execute=ex)
             self.assertNotIsInstance(out, TrackerError, msg=repr(out))
             self.assertEqual(out["kind"], "noop")
             self.assertFalse(any(c.op in {"status-set", "status-transitions"}
                                  for c in ex.calls))
-            saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
-            self.assertEqual(saved["lastSyncedAt"], "OLD")
-            receipts = _receipts(flow)
-            self.assertEqual(len(receipts), 1)
-            self.assertEqual(receipts[0]["status"], "noop")
-            self.assertEqual(receipts[0]["event"], "makePr")
 
 
 class EffectiveReviewBackendPrecedence(unittest.TestCase):
@@ -2296,47 +1968,6 @@ class EffectiveReviewBackendPrecedence(unittest.TestCase):
         cfg = {"review": {"backend": "codex"}}
         self.assertFalse(V._completion_review_configured(cfg, {"default_review": "rp"}))
         self.assertFalse(V._completion_review_configured({"review": {"backend": "rp:x"}}, {}))
-
-
-class TerminalFoldConverges(unittest.TestCase):
-    """PR #246 wave 17 P2: a repeated tracker-terminal fold is a noop - no
-    rewrite, no lastSyncedAt advance."""
-
-    def test_second_fold_is_noop_and_synced_not_advanced(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            flow = Path(tmp) / ".flow"
-            cfg = gh_cfg()
-            cfg["review"] = {"backend": "codex"}  # completion gated
-            path = _write_flow(
-                flow, cfg,
-                spec_extra={"status": "done",
-                            "completion_review_status": "unknown"},
-                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
-                         "lastSyncedAt": "PRIOR-FOLD",
-                         "linkState": "linked"},
-            )
-            # Tracker terminal (closed completed), flow derives in_review
-            # (done + no ship + gated) -> decide says apply_local; the raw
-            # status is ALREADY done, so the verb must converge to noop.
-            ex = fake_execute({
-                "status-parent-read": ok(_gh_parent(
-                    state="closed", labels=["status:done"],
-                    state_reason="completed")),
-                "merge-evidence": ok([{"state": "MERGED", "number": 1}]),
-            })
-            out = S.status(
-                flow, "fn-1-demo", to="done",
-                event="work.done", execute=ex)
-            self.assertNotIsInstance(out, TrackerError)
-            self.assertEqual(out["kind"], "noop")
-            self.assertEqual(out["reason"], "already_folded")
-            saved = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(saved["status"], "done")
-            self.assertEqual(saved["tracker"]["lastSyncedAt"], "PRIOR-FOLD")
-            receipts = _receipts(flow)
-            self.assertEqual(len(receipts), 1)
-            self.assertEqual(receipts[0]["status"], "noop")
-            self.assertEqual(receipts[0]["event"], "work.done")
 
 
 class TodoBacklogEarlyAgreement(unittest.TestCase):

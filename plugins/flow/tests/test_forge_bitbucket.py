@@ -210,50 +210,5 @@ class BitbucketAdapterTests(ForgeTestCase):
         self.assertFalse([c for c in fake.calls if c[0] == "bkt"])
 
 
-class BitbucketRouteTests(ForgeTestCase):
-    def flow(self, *args):
-        proc = REAL_RUN([*FLOWCTL_CMD, *args], cwd=self.repo,
-                        capture_output=True, text=True, timeout=120)
-        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        return proc.stdout
-
-    def spec_on(self, branch):
-        REAL_RUN(["git", "init", "-q"], cwd=self.repo, check=True)
-        self.flow("init", "--json")
-        sid = json.loads(self.flow("spec", "create", "--title", "PR fixture", "--json"))["id"]
-        self.flow("spec", "set-branch", sid, "--branch", branch, "--json")
-        self.flow("spec", "ready", sid)
-        return sid
-
-    def test_snapshot_reads_pull_requests_and_names_the_forge(self):
-        sid = self.spec_on("fx-reused")
-        fake = BktCli(bkt=[fixture("pr-open"), fixture("pr-branch-reused"), fixture("commit-reused"),
-                           fixture("land-pr-reused-fields"), fixture("land-statuses-reused"), fixture("land-checks-reused")])
-        with patch.object(f, "get_repo_root", return_value=self.repo), patch.object(f, "get_flow_dir", return_value=self.repo / ".flow"), patch.object(f, "_pilot_strikes_ledger_path", return_value=None):
-            result = self.run_with(fake, lambda: f.pilot_snapshot(sid))
-        self.assertEqual(result["forge"], "bitbucket")
-        self.assertFalse(result["pr_listing_failed"])
-        pr = result["selected"]["pr"]
-        self.assertEqual((pr["open"]["number"], [r["number"] for r in pr["closed"]], pr["probe_failed"]), (4, [3], False))
-        # PR 4 has no build reported on its head: not green, never ready.
-        self.assertEqual(pr["open"]["readiness"], {
-            "head_sha": "ef14a8697d98cb0eb95e9e706fa763f10977b16a", "build": None, "merge_status": "clean",
-            "approval": "none", "squash_allowed": True, "green": False, "ready": False})
-        self.assertEqual(result["route"]["decision"]["value"], "existing_pr_tail")
-
-    def test_route_judge_reads_the_branch_pull_requests(self):
-        body = self.repo / "spec.md"
-        body.write_text("Implement feature", encoding="utf-8")
-        spec_data = {"title": "Feature", "status": "open", "branch_name": "fx-merged"}
-        fake = BktCli(bkt=[fixture("pr-branch-merged"), fixture("commit-short"), fixture("pr-activity-merged")])
-        with patch.object(f, "get_config", return_value=True), patch.object(f, "get_repo_root", return_value=self.repo), patch.object(f, "get_flow_dir", return_value=self.repo), patch.object(f, "resolve_spec_id_arg", return_value="fn-1-feature"), patch.object(f, "load_json_or_exit", return_value=spec_data), patch.object(f, "normalize_epic", side_effect=lambda x: x), patch.object(f, "find_spec_md_path", return_value=body), patch.object(f.TaskInventory, "load", return_value=SimpleNamespace(by_spec={})):
-            state = self.run_with(fake, lambda: f.judge_route_state({}, "fn-1-feature"))
-            failed = BktCli(bkt=[under("pr-branch-missing-repo", branch_argv("fx-merged"))])
-            f.repo_forge.cache_clear()
-            unread = self.run_with(failed, lambda: f.judge_route_state({}, "fn-1-feature"))
-        self.assertEqual((state["pr_exists"], state["pr_ref"]["number"], state["pr_ref"]["state"]), (True, 5, "MERGED"))
-        self.assertIsNone(unread["pr_exists"])   # a failed read is never "no PR"
-
-
 if __name__ == "__main__":
     unittest.main()

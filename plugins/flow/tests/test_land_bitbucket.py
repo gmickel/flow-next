@@ -140,7 +140,7 @@ class BitbucketMergeEvidenceTests(ForgeTestCase):
     def test_tracker_classifies_the_forge_read(self):
         from flowctl_tracker.status import policy
         self.addCleanup(setattr, policy, "forge_merge_read", policy.forge_merge_read)
-        self.assertIs(f._import_tracker_status().policy.forge_merge_read, f._forge_merge_read)
+        policy.forge_merge_read = f._forge_merge_read
         spec_only = derived("land-diffstat-race", lambda page: page["values"][0].update(new={"path": ".flow/specs/fn-1.md"}))
         for want, diffstat in (("merged", fixture("land-diffstat-race")), ("none", spec_only),
                                ("probe-error", under("pr-branch-missing-repo", fixture("land-diffstat-race")["argv"]))):
@@ -150,81 +150,6 @@ class BitbucketMergeEvidenceTests(ForgeTestCase):
                 with patch.object(f, "get_repo_root", return_value=self.repo):
                     got = self.run_with(fake, lambda: policy.merge_evidence({}, {"branch_name": "fx-race"}, None))
                 self.assertEqual(got, want)
-
-
-REFERENCE = re.sub(r"\s*\n\s*", " ", (SKILLS / "flow-next-land" / "forge-bitbucket.md").read_text(encoding="utf-8"))
-COMMANDS = re.findall(r"`(bkt --context \"\$BKT_CONTEXT\" api [^`]+)`", REFERENCE)
-
-
-class LandReferenceTests(BitbucketShellCase):
-    RECORDINGS = ("land-pr-ready", "land-commit-ready-full", "land-children", "land-merge-race", "land-pr-race-merged")
-
-    def run_command(self, command, pr="10", head=READY, branch="fx-ready", **env):
-        repo = self.repo_on("main", "git@ssh.bitbucket.org:flownextnew/flownext.git")
-        setup = re.search(r"```bash\n(.*?)```", (SKILLS / "flow-next-land" / "forge-bitbucket.md").read_text(encoding="utf-8"), re.S).group(1)
-        statuses = recorded("land-statuses-successful")
-        return self.run_sh(["bash", "-c", f"set -o pipefail; {setup}\n{command}"], cwd=repo, PR=pr, HEAD_SHA=head, BRANCH=branch,
-                           BKT_ANSWERS=answers(*map(recorded, self.RECORDINGS), statuses), **env)
-
-    def command(self, needle):
-        found = [c for c in COMMANDS if needle in c]
-        self.assertEqual(len(found), 1, (needle, COMMANDS))
-        return found[0]
-
-    def test_every_bkt_command_is_recorded(self):
-        self.assertEqual(len(COMMANDS), 5, COMMANDS)
-        for command in COMMANDS:
-            with self.subTest(command):
-                pr = "12" if "/merge" in command else "10"
-                result = self.run_command(command, pr=pr)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertTrue(result.stdout.strip())
-
-    def test_the_answers_land_reads(self):
-        pr = json.loads(self.run_command(self.command('pullrequests/$PR"')).stdout)
-        self.assertEqual((pr["state"], pr["source"]["branch"]["name"], pr["source"]["repository"]["full_name"]),
-                         ("OPEN", "fx-ready", "flownextnew/flownext"))
-        children = json.loads(self.run_command(self.command("destination.branch.name")).stdout)
-        self.assertEqual([(c["id"], c["state"], c["destination"]["branch"]["name"]) for c in children["values"]], [(15, "OPEN", "fx-ready")])
-        self.assertTrue(json.loads(self.run_command(self.command("/commit/$HEAD_SHA\"")).stdout)["date"])
-        statuses = json.loads(self.run_command(self.command("/statuses")).stdout)
-        self.assertEqual([s["state"] for s in statuses["values"]], ["SUCCESSFUL"])
-
-    def test_the_merge_squashes_and_the_read_after_it_shows_the_head_it_took(self):
-        merge = self.command("/merge")
-        self.assertIn('"merge_strategy":"squash"', merge)
-        self.assertNotIn("sha", merge)
-        merged = json.loads(self.run_command(merge, pr="12").stdout)
-        self.assertEqual(merged["state"], "MERGED")
-        # Bitbucket ignored the expected head it was sent and merged the branch's moved head (recorded).
-        sent = json.loads(json.loads(recorded("land-merge-race").read_text(encoding="utf-8"))["argv"][-1])
-        self.assertEqual(sent["sha"], JUDGED)
-        after = json.loads(self.run_command(self.command('pullrequests/$PR"'), pr="12").stdout)
-        self.assertEqual((after["state"], after["source"]["commit"]["hash"]), ("MERGED", MERGED_HEAD[:12]))
-        self.assertFalse(MERGED_HEAD.startswith(JUDGED), "the merged head is not the one that was read")
-        self.assertTrue(after["merge_commit"]["hash"])
-
-    def test_the_child_query_escapes_the_branch_name(self):
-        # A branch name may hold a double quote; Bitbucket's query language escapes it with a backslash.
-        jq = re.search(r"\$\(jq -rn --arg b \"\$BRANCH\" ('.*?')\)&pagelen", self.command("destination.branch.name")).group(1)
-        result = self.run_sh(["bash", "-c", f'jq -rn --arg b "$BRANCH" {jq}'], BRANCH='fx-"q\\x')
-        from urllib.parse import unquote
-        self.assertEqual(unquote(result.stdout.strip()), 'state="OPEN" AND destination.branch.name="fx-\\"q\\\\x"')
-
-    def test_windows_jq_output_leaves_no_carriage_return(self):
-        setup = re.search(r"```bash\n(.*?)```", (SKILLS / "flow-next-land" / "forge-bitbucket.md").read_text(encoding="utf-8"), re.S).group(1)
-        jq = (self.bin / "jq").resolve()
-        (self.bin / "jq").unlink()
-        self.stub("jq", f"#!/bin/sh\n{jq} \"$@\" | sed 's/$/\\r/'\n")
-        repo = self.repo_on("main", "git@ssh.bitbucket.org:flownextnew/flownext.git")
-        result = self.run_sh(["bash", "-c", f'{setup}\nprintf "%s|%s" "$BKT_CONTEXT" "$REPO"'], cwd=repo)
-        self.assertEqual(result.stdout, "flownextnew|flownextnew/flownext")
-
-    def test_no_cloud_context_leaves_the_context_empty(self):
-        setup = re.search(r"```bash\n(.*?)```", (SKILLS / "flow-next-land" / "forge-bitbucket.md").read_text(encoding="utf-8"), re.S).group(1)
-        repo = self.repo_on("main", "https://bitbucket.org/flownextnew/flownext.git")
-        result = self.run_sh(["bash", "-c", f'{setup}\nprintf "%s|%s" "$BKT_CONTEXT" "$REPO"'], cwd=repo, BKT_CONTEXTS="context-list-none")
-        self.assertEqual(result.stdout, "|flownextnew/flownext")
 
 
 if __name__ == "__main__":

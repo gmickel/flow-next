@@ -225,10 +225,11 @@ class Unready(unittest.TestCase):
 
     def test_cli_inactive_bridge_is_the_inactive_envelope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            subprocess.run([sys.executable, str(ROOT / "scripts" / "flowctl.py"), "init"],
-                           cwd=tmp, check=True, capture_output=True)
+            flow = Path(tmp) / ".flow"
+            flow.mkdir()
+            (flow / "config.json").write_text("{}", encoding="utf-8")
             run = subprocess.run(
-                [sys.executable, str(ROOT / "scripts" / "flowctl.py"), "tracker", "wire",
+                [sys.executable, str(ROOT / "scripts" / "edge.py"), "tracker", "wire",
                  "unready", "--locator", json.dumps(loc(LN_UUID, "FLOW-106")), "--json"],
                 cwd=tmp, capture_output=True, text=True)
         payload = json.loads(run.stdout)

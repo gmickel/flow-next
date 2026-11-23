@@ -19,7 +19,7 @@ from flowctl_test_support import FLOWCTL_CMD
 TESTS = Path(__file__).resolve().parent
 SCRIPTS = TESTS.parent / "scripts"
 sys.path.insert(0, str(TESTS.parent / "scripts"))
-spec = importlib.util.spec_from_file_location("flowctl_forge_test", SCRIPTS / "flowctl.py")
+spec = importlib.util.spec_from_file_location("flowctl_forge_test", SCRIPTS / "forge.py")
 f = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = f
 spec.loader.exec_module(f)
@@ -150,23 +150,6 @@ class ForgeRuleTests(ForgeTestCase):
                 self.assertIsNone(result.forge)
                 self.assertFalse([c for c in fake.calls if c[0] == "gh"])
 
-    def test_registered_fake_forge_answers_the_shared_lookup(self):
-        row = {"number": 9, "url": "https://forge.fake.test/o/r/pulls/9", "state": "OPEN",
-               "headRefName": "fn-1-feature", "headRefOid": "abc", "mergedAt": None}
-        fake_forge = {"owns_host": lambda host: host == "forge.fake.test",
-                      "list_prs": lambda repo, origin, head, *, state, limit: [row] if head == "fn-1-feature" else []}
-        body = self.repo / "spec.md"
-        body.write_text("Implement feature", encoding="utf-8")
-        spec_data = {"title": "Feature", "status": "open", "branch_name": "fn-1-feature"}
-        fake = FakeCli("https://forge.fake.test/o/r.git", glab_hosts=())
-        with patch.dict(f.FORGE_ADAPTERS, {"fake": fake_forge}), patch.object(f, "get_config", return_value=True), patch.object(f, "get_repo_root", return_value=self.repo), patch.object(f, "get_flow_dir", return_value=self.repo), patch.object(f, "resolve_spec_id_arg", return_value="fn-1-feature"), patch.object(f, "load_json_or_exit", return_value=spec_data), patch.object(f, "normalize_epic", side_effect=lambda x: x), patch.object(f, "find_spec_md_path", return_value=body), patch.object(f.TaskInventory, "load", return_value=SimpleNamespace(by_spec={})):
-            state = self.run_with(fake, lambda: f.judge_route_state({}, "fn-1-feature"))
-            self.assertEqual(f.repo_forge(str(self.repo)).forge, "fake")
-            approval = f.forge_approval_rows("fn-1-feature", self.repo)
-        self.assertEqual(state["pr_ref"], row)
-        self.assertEqual(f.judge_route_lifecycle(state)["value"], "existing_pr_tail")
-        self.assertEqual(approval, (None, "spec approval is unsupported on this forge (fake)"))
-
 
 class GitLabAdapterTests(ForgeTestCase):
     MRS = "projects/flownext%2Fflownext/merge_requests?"
@@ -233,12 +216,6 @@ class GitLabAdapterTests(ForgeTestCase):
                 raise FileNotFoundError("glab")
             return fake(argv, *args, **kwargs)
         self.assertIsNone(self.run_with(run, lambda: f.forge_list_prs(self.repo, "b", state="all", limit=100)))
-
-    def test_spec_approval_is_unsupported(self):
-        fake = FakeCli(GITLAB_ORIGIN)
-        with patch.object(f, "get_repo_root", return_value=self.repo):
-            status = self.run_with(fake, lambda: f.spec_approval_status(self.repo, {"id": "fn-1-x"}))
-        self.assertEqual(status, {"approved": False, "reason": "spec approval is unsupported on this forge (gitlab)"})
 
 
 def as_read(name: str, argv_tail: str, change=None) -> dict:
@@ -367,7 +344,7 @@ class GitLabMergeEvidenceTests(ForgeTestCase):
     def test_tracker_classifies_the_forge_read(self):
         from flowctl_tracker.status import policy
         self.addCleanup(setattr, policy, "forge_merge_read", policy.forge_merge_read)
-        self.assertIs(f._import_tracker_status().policy.forge_merge_read, f._forge_merge_read)
+        policy.forge_merge_read = f._forge_merge_read
         cases = [
             ("merged", "fn317-ready", ("mr-evidence-merged", "mr-evidence-merged-diffs")),
             ("none", "fn317-spec-only", ("mr-evidence-spec-only", "mr-evidence-spec-only-diffs")),
@@ -383,33 +360,6 @@ class GitLabMergeEvidenceTests(ForgeTestCase):
                 with patch.object(f, "get_repo_root", return_value=self.repo):
                     got = self.run_with(fake, lambda b=branch: policy.merge_evidence({}, {"branch_name": b}, None))
                 self.assertEqual(got, want)
-
-
-class PilotSnapshotForgeTests(ForgeTestCase):
-    def test_snapshot_reads_merge_requests_and_names_the_forge(self):
-        def flow(*args):
-            proc = REAL_RUN([*FLOWCTL_CMD, *args], cwd=self.repo, capture_output=True, text=True, timeout=120)
-            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-            return proc.stdout
-        REAL_RUN(["git", "init", "-q"], cwd=self.repo, check=True)
-        flow("init", "--json")
-        sid = json.loads(flow("spec", "create", "--title", "MR fixture", "--json"))["id"]
-        flow("spec", "set-branch", sid, "--branch", "fn73-fx-reused", "--json")
-        flow("spec", "ready", sid)
-        fake = FakeCli(GITLAB_ORIGIN, glab=[fixture(n) for n in ("mr-open", "mr-locked", "mr-branch-all",
-                                                                  "mr-readiness-draft", "project-squash-default")])
-        with patch.object(f, "get_repo_root", return_value=self.repo), patch.object(f, "get_flow_dir", return_value=self.repo / ".flow"), patch.object(f, "_pilot_strikes_ledger_path", return_value=None):
-            result = self.run_with(fake, lambda: f.pilot_snapshot(sid))
-        self.assertEqual(result["forge"], "gitlab")
-        self.assertFalse(result["pr_listing_failed"])
-        pr = result["selected"]["pr"]
-        self.assertEqual((pr["open"]["number"], [r["number"] for r in pr["closed"]]), (2, [1]))
-        # GitLab has not checked the draft MR !2 since: approval unknown, never ready.
-        self.assertEqual(pr["open"]["readiness"], {
-            "head_sha": "567560351a74b8fc2bb56832769eb26eb081259c", "pipeline": "success",
-            "merge_status": "unchecked", "approval": "unknown", "squash_allowed": True,
-            "green": True, "ready": False})
-        self.assertEqual(result["route"]["decision"]["value"], "existing_pr_tail")
 
 
 if __name__ == "__main__":

@@ -21,14 +21,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from flowctl_tracker import classify  # noqa: E402
-from flowctl_tracker import facade as F  # noqa: E402
 from flowctl_tracker import lifecycle as L  # noqa: E402
+from flowctl_tracker import spec_store as SS  # noqa: E402
 from flowctl_tracker import status as S  # noqa: E402
-from flowctl_tracker import syncbody as SB  # noqa: E402
-from flowctl_tracker.facade.steps import create_if_unlinked  # noqa: E402
 from flowctl_tracker.types import ErrorClass, Response, TrackerError  # noqa: E402
 
-FLOWCTL = ROOT / "scripts" / "flowctl.py"
+FLOWCTL = ROOT / "scripts" / "edge.py"
 GH_NODE = "I_kwDOTestNode1"
 GL_ID = 84817009
 LN_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
@@ -116,20 +114,23 @@ def jr_cfg(*, auth_scheme: str | None = None) -> dict:
 def _write_flow(flow: Path, config: dict, *, tracker: dict | None = None) -> Path:
     (flow / "specs").mkdir(parents=True, exist_ok=True)
     (flow / "config.json").write_text(json.dumps(config), encoding="utf-8")
-    block = {"id": None, "identifier": None, "url": None,
-             "lastSyncedAt": None, "depRelations": []}
-    block.update(tracker or {})
-    path = flow / "specs" / "fn-1-demo.json"
-    path.write_text(json.dumps({
-        "id": "fn-1-demo", "title": "Demo", "status": "open",
-        "branch_name": "fn-1-demo", "tracker": block,
-    }, indent=2) + "\n", encoding="utf-8")
+    tr = tracker or {}
+    lines = ["---", "id: fn-1-demo", "title: Demo"]
+    if any(tr.get(k) for k in ("id", "identifier", "url", "snapshot")):
+        lines.append("tracker:")
+        for k in ("id", "identifier", "url", "snapshot"):
+            if tr.get(k):
+                lines.append(f"  {k}: {json.dumps(str(tr[k]))}")
+    lines.extend(["---", ""])
+    path = flow / "specs" / "fn-1-demo.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
     return path
 
 
 def _saved(flow: Path) -> dict:
-    return json.loads(
-        (flow / "specs" / "fn-1-demo.json").read_text(encoding="utf-8"))["tracker"]
+    loaded = SS.load_spec_doc(flow / "specs" / "fn-1-demo.md", spec_id="fn-1-demo")
+    assert not isinstance(loaded, TrackerError), loaded
+    return L.helpers.merged_tracker(loaded[0])
 
 
 def _create_call(ex):
@@ -210,27 +211,27 @@ class ParentField(unittest.TestCase):
     def test_trimmed_value_is_sent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            _write_flow(flow, ln_cfg(), tracker={"parent": " WOR-40 "})
+            _write_flow(flow, ln_cfg())
             ex = fake_execute(_create_responses("linear"))
-            L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            L.create(flow, "fn-1-demo", title="T", body="B", parent=" WOR-40 ", execute=ex)
             self.assertEqual(_create_json(ex)["variables"]["input"]["parentId"],
                              "WOR-40")
 
     def test_null_is_unmanaged(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            _write_flow(flow, ln_cfg(), tracker={"parent": None})
+            _write_flow(flow, ln_cfg())
             ex = fake_execute(_create_responses("linear"))
-            L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            L.create(flow, "fn-1-demo", title="T", body="B", parent=None, execute=ex)
             self.assertNotIn("parentId", _create_json(ex)["variables"]["input"])
 
     def test_unusable_value_errors_before_any_request(self) -> None:
         for bad in ("", "  ", 12, {"key": "WOR-40"}):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as tmp:
                 flow = Path(tmp) / ".flow"
-                _write_flow(flow, ln_cfg(), tracker={"parent": bad})
+                _write_flow(flow, ln_cfg())
                 ex = fake_execute({})
-                out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+                out = L.create(flow, "fn-1-demo", title="T", body="B", parent=bad, execute=ex)
                 self.assertIsInstance(out, TrackerError, bad)
                 self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
                 self.assertEqual(out.subtype, "parent")
@@ -264,7 +265,7 @@ class NoParentKeepsTheRequestBytes(unittest.TestCase):
                 self.assertNotIsInstance(out, TrackerError, f"{provider}: {out}")
                 self.assertEqual(_create_call(ex).body,
                                  json.dumps(self.EXPECTED[provider]).encode())
-                expected_ops = ["lifecycle-create", "sync-body-parent-read"]
+                expected_ops = ["lifecycle-create"]
                 if provider == "jira":
                     expected_ops.insert(0, "lifecycle-create-meta")
                 self.assertEqual([c.op for c in ex.calls], expected_ops)
@@ -276,28 +277,28 @@ class JiraCloudParent(unittest.TestCase):
     def test_parent_rides_the_one_create_request(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            _write_flow(flow, jr_cfg(auth_scheme="cloud-basic"),
-                        tracker={"parent": "SCRUM-12"})
+            _write_flow(flow, jr_cfg(auth_scheme="cloud-basic"))
             ex = fake_execute(_create_responses("jira"))
-            out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            out = L.create(flow, "fn-1-demo", title="T", body="B",
+                           parent="SCRUM-12", execute=ex)
             self.assertEqual(out["identifier"], "SCRUM-1")
             self.assertEqual(out["parent"], "SCRUM-12")
             self.assertEqual(_create_json(ex)["fields"]["parent"],
                              {"key": "SCRUM-12"})
             self.assertEqual(
                 [c.op for c in ex.calls],
-                ["lifecycle-create-meta", "lifecycle-create",
-                 "sync-body-parent-read"])
-            self.assertEqual(_saved(flow)["parent"], "SCRUM-12")
+                ["lifecycle-create-meta", "lifecycle-create"])
+            self.assertNotIn("parent", _saved(flow))
 
     def test_rejected_parent_returns_jiras_error_and_links_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            _write_flow(flow, jr_cfg(), tracker={"parent": "SCRUM-999"})
+            _write_flow(flow, jr_cfg())
             ex = fake_execute({"lifecycle-create": rejected(
                 "jira", 400, {"errorMessages": [],
                               "errors": {"parent": "Could not find issue by id or key."}})})
-            out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            out = L.create(flow, "fn-1-demo", title="T", body="B",
+                           parent="SCRUM-999", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
             self.assertEqual(
@@ -309,24 +310,25 @@ class LinearParent(unittest.TestCase):
     def test_parent_id_rides_the_create_input(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            _write_flow(flow, ln_cfg(), tracker={"parent": "WOR-40"})
+            _write_flow(flow, ln_cfg())
             ex = fake_execute(_create_responses("linear"))
-            out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            out = L.create(flow, "fn-1-demo", title="T", body="B",
+                           parent="WOR-40", execute=ex)
             self.assertEqual(out["parent"], "WOR-40")
             self.assertEqual(
                 _create_json(ex)["variables"]["input"],
                 {"teamId": "team-1", "title": "T", "description": "B",
                  "parentId": "WOR-40"})
             self.assertEqual([c.op for c in ex.calls],
-                             ["lifecycle-create", "sync-body-parent-read"])
+                             ["lifecycle-create"])
 
     def test_parent_and_project_fields_both_ride(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            _write_flow(flow, ln_cfg(),
-                        tracker={"parent": "WOR-40", "projectId": PROJECT})
+            _write_flow(flow, ln_cfg())
             ex = fake_execute(_create_responses("linear"))
-            L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            L.create(flow, "fn-1-demo", title="T", body="B",
+                     parent="WOR-40", project_id=PROJECT, execute=ex)
             self.assertEqual(
                 _create_json(ex)["variables"]["input"],
                 {"teamId": "team-1", "title": "T", "description": "B",
@@ -335,32 +337,15 @@ class LinearParent(unittest.TestCase):
     def test_unknown_parent_returns_linears_error_and_links_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            _write_flow(flow, ln_cfg(), tracker={"parent": "WOR-999"})
+            _write_flow(flow, ln_cfg())
             ex = fake_execute({"lifecycle-create": rejected(
                 "linear", 400,
                 {"errors": [{"message": "Entity not found: Issue - WOR-999"}]})})
-            out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            out = L.create(flow, "fn-1-demo", title="T", body="B",
+                           parent="WOR-999", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.NOT_FOUND)
             self.assertIsNone(_saved(flow)["id"])
-
-    def test_mcp_route_payload_carries_the_parent(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            flow = root / ".flow"
-            _write_flow(flow, ln_cfg(preferred="mcp"), tracker={"parent": "WOR-40"})
-            flow_file = root / "flow.md"
-            flow_file.write_text("## Goal\nShip it.\n", encoding="utf-8")
-            ex = fake_execute({})
-            with mock.patch.dict(os.environ, {}, clear=False):
-                os.environ.pop("LINEAR_API_KEY", None)
-                out = F.sync(flow, "fn-1-demo", op="push", event="capture",
-                             flow_file=str(flow_file), body_file=str(flow_file),
-                             execute=ex)
-            self.assertIsInstance(out, TrackerError)
-            self.assertIs(out.cls, ErrorClass.EXTERNAL_ACTION_REQUIRED)
-            self.assertEqual(out.details["payload"]["parent"], "WOR-40")
-            self.assertEqual(ex.calls, [])
 
 
 class GitLabEpicParent(unittest.TestCase):
@@ -368,9 +353,10 @@ class GitLabEpicParent(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         flow = Path(tmp.name) / ".flow"
-        _write_flow(flow, gl_cfg(), tracker={"parent": parent})
+        _write_flow(flow, gl_cfg())
         ex = fake_execute(responses)
-        return L.create(flow, "fn-1-demo", title="T", body="B", execute=ex), ex, flow
+        return L.create(flow, "fn-1-demo", title="T", body="B",
+                        parent=parent, execute=ex), ex, flow
 
     def test_epic_id_is_sent_without_a_read(self) -> None:
         responses = _create_responses("gitlab")
@@ -380,7 +366,7 @@ class GitLabEpicParent(unittest.TestCase):
         self.assertEqual(_create_json(ex),
                          {"title": "T", "description": "B", "epic_id": 42})
         self.assertEqual([c.op for c in ex.calls],
-                         ["lifecycle-create", "sync-body-parent-read"])
+                         ["lifecycle-create"])
 
     def test_short_reference_resolves_in_the_projects_group(self) -> None:
         out, ex, _flow = self._create("&5", {
@@ -444,18 +430,19 @@ class GitLabEpicParent(unittest.TestCase):
                 self.assertIsNone(out["parent"])
                 self.assertEqual(out["degraded"]["kind"], "parent_not_set")
                 self.assertEqual([c.op for c in ex.calls],
-                                 ["lifecycle-create", "sync-body-parent-read"])
+                                 ["lifecycle-create"])
 
     def test_digits_that_are_not_ascii_are_invalid_input(self) -> None:
         for parent in ("²", "４２", "٤٢"):
             with self.subTest(parent=parent), tempfile.TemporaryDirectory() as tmp:
                 flow = Path(tmp) / ".flow"
-                _write_flow(flow, gl_cfg(), tracker={"parent": parent})
+                _write_flow(flow, gl_cfg())
                 body = Path(tmp) / "b.md"
                 body.write_text("B", encoding="utf-8")
                 ex = fake_execute({})
                 payload, _code = L.run(flow, "create", spec_id="fn-1-demo",
-                                       title="T", body_file=str(body), execute=ex)
+                                       title="T", body_file=str(body),
+                                       parent=parent, execute=ex)
                 self.assertEqual(json.loads(payload)["class"], "invalid_input", payload)
                 self.assertEqual(ex.calls, [])
 
@@ -466,9 +453,10 @@ class RefusedParent(unittest.TestCase):
     def _assert_refused(self, cfg: dict, *, word: str) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            _write_flow(flow, cfg, tracker={"parent": "X-1"})
+            _write_flow(flow, cfg)
             ex = fake_execute({})
-            out = L.create(flow, "fn-1-demo", title="T", body="B", execute=ex)
+            out = L.create(flow, "fn-1-demo", title="T", body="B",
+                           parent="X-1", execute=ex)
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.CAPABILITY)
             self.assertEqual(out.subtype, "parent")
@@ -482,29 +470,14 @@ class RefusedParent(unittest.TestCase):
     def test_jira_data_center_refuses(self) -> None:
         self._assert_refused(jr_cfg(auth_scheme="bearer-pat"), word="Jira Cloud")
 
-    def test_github_first_push_refuses_before_any_request(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            flow = root / ".flow"
-            _write_flow(flow, gh_cfg(), tracker={"parent": "#7"})
-            flow_file = root / "flow.md"
-            flow_file.write_text("## Goal\nShip it.\n", encoding="utf-8")
-            ex = fake_execute({})
-            out = F.sync(flow, "fn-1-demo", op="push", event="capture",
-                         flow_file=str(flow_file), body_file=str(flow_file),
-                         execute=ex)
-            self.assertIsInstance(out, TrackerError)
-            self.assertIs(out.cls, ErrorClass.CAPABILITY)
-            self.assertEqual(ex.calls, [])
-
 
 class ParentOption(unittest.TestCase):
-    """`tracker create --parent` records the parent with the link."""
+    """`tracker create --parent` passes the parent at creation and does not store it."""
 
-    def test_option_overrides_and_is_recorded(self) -> None:
+    def test_option_overrides_and_is_not_stored(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            _write_flow(flow, ln_cfg(), tracker={"parent": "WOR-1"})
+            _write_flow(flow, ln_cfg())
             body = Path(tmp) / "body.md"
             body.write_text("B", encoding="utf-8")
             ex = fake_execute(_create_responses("linear"))
@@ -515,7 +488,7 @@ class ParentOption(unittest.TestCase):
             self.assertEqual(json.loads(payload)["data"]["parent"], "WOR-40")
             self.assertEqual(_create_json(ex)["variables"]["input"]["parentId"],
                              "WOR-40")
-            self.assertEqual(_saved(flow)["parent"], "WOR-40")
+            self.assertNotIn("parent", _saved(flow))
 
     def test_empty_option_is_invalid_input_before_any_request(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -527,24 +500,6 @@ class ParentOption(unittest.TestCase):
             self.assertIsInstance(out, TrackerError)
             self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
             self.assertEqual(ex.calls, [])
-
-
-class FirstPushCreate(unittest.TestCase):
-    """R6: the create the first push runs for an unlinked spec."""
-
-    def test_first_push_create_carries_the_recorded_parent(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            flow = Path(tmp) / ".flow"
-            _write_flow(flow, jr_cfg(), tracker={"parent": "SCRUM-12"})
-            ex = fake_execute(_create_responses("jira"))
-            out = create_if_unlinked(
-                flow, "fn-1-demo", title="T", body="B", flow_body="B",
-                config=jr_cfg(), event="capture", execute=ex,
-                completed=[], statuses=[])
-            self.assertEqual(out["kind"], "created")
-            self.assertEqual(out["parent"], "SCRUM-12")
-            self.assertEqual(_create_json(ex)["fields"]["parent"],
-                             {"key": "SCRUM-12"})
 
 
 class CreateFirstParent(unittest.TestCase):
@@ -607,7 +562,7 @@ class CreateFirstParent(unittest.TestCase):
             body = Path(tmp) / "b.md"
             body.write_text("B", encoding="utf-8")
             for parent, expected in ((None, no_parent), ("WOR-10", under_10)):
-                argv = [sys.executable, str(FLOWCTL), "sync", "create-first-key",
+                argv = [sys.executable, str(FLOWCTL), "tracker", "create-first-key",
                         "--type", "linear", "--title", "T",
                         "--body-file", str(body), "--json"]
                 if parent:
@@ -616,30 +571,6 @@ class CreateFirstParent(unittest.TestCase):
                                      text=True, encoding="utf-8")
                 self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
                 self.assertEqual(json.loads(out.stdout)["key"], expected)
-
-    def test_recovery_put_keeps_the_recorded_parent(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = Path(tmp)
-            subprocess.run([sys.executable, str(FLOWCTL), "init", "--json"],
-                           cwd=cwd, capture_output=True, check=True)
-            flow = cwd / ".flow"
-            (flow / "config.json").write_text(json.dumps(ln_cfg()), encoding="utf-8")
-            key = L.compute_create_first_key("linear", "T", "B")
-            ex = fake_execute({"lifecycle-create": ok({"data": {"issueCreate": {
-                "success": True, "issue": _ln_issue("B")}}})})
-            L.create_first(flow, title="T", body="B", retry_key=key,
-                           parent="WOR-10", execute=ex)
-            put = subprocess.run(
-                [sys.executable, str(FLOWCTL), "sync", "create-first-put",
-                 "--key", key, "--id", LN_UUID, "--identifier", "WOR-17",
-                 "--url", "https://linear.app/x/issue/WOR-17", "--title", "T",
-                 "--transport", "linear", "--spec-id", "wor-17-t", "--json"],
-                cwd=cwd, capture_output=True, text=True, encoding="utf-8")
-            self.assertEqual(put.returncode, 0, put.stdout + put.stderr)
-            retried = L.create_first(flow, title="T", body="B", retry_key=key,
-                                     parent="WOR-10", execute=fake_execute({}))
-            self.assertTrue(retried["retried"])
-            self.assertEqual(retried["parent"], "WOR-10")
 
     def test_retry_replays_a_parent_gitlab_did_not_set(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -655,91 +586,6 @@ class CreateFirstParent(unittest.TestCase):
             self.assertIsNone(again["parent"])
             self.assertEqual(again["degraded"]["kind"], "parent_not_set")
 
-    def test_recovery_put_keeps_a_parent_gitlab_did_not_set(self) -> None:
-        # PR #625 review: after a put (the recovery one when the record write
-        # failed, or the ceremony's own), a retry still reports it not set.
-        from flowctl_tracker.lifecycle import verbs as LV  # noqa: PLC0415
-        for fail_record_write in (True, False):
-            with self.subTest(fail_record_write=fail_record_write), \
-                    tempfile.TemporaryDirectory() as tmp:
-                cwd = Path(tmp)
-                subprocess.run([sys.executable, str(FLOWCTL), "init", "--json"],
-                               cwd=cwd, capture_output=True, check=True)
-                flow = cwd / ".flow"
-                (flow / "config.json").write_text(json.dumps(gl_cfg()), encoding="utf-8")
-                key = L.compute_create_first_key("gitlab", "T", "B", "42")
-                real_write = LV.atomic_write_json
-                writes = []
-
-                def flaky(path, data, fail=fail_record_write, writes=writes,
-                          real_write=real_write):
-                    writes.append(data)
-                    if fail and len(writes) == 2:
-                        return TrackerError(ErrorClass.TRANSPORT, "disk full", subtype="write")
-                    return real_write(path, data)
-
-                ex = fake_execute({"lifecycle-create": ok({**_gl_issue("B"), "epic": None})})
-                with mock.patch.object(LV, "atomic_write_json", side_effect=flaky):
-                    out = L.create_first(flow, title="T", body="B", retry_key=key,
-                                         parent="42", execute=ex)
-                d = out.details if fail_record_write else out
-                put = subprocess.run(
-                    [sys.executable, str(FLOWCTL), "sync", "create-first-put",
-                     "--key", key, "--id", str(d["id"]), "--identifier", d["identifier"],
-                     "--url", d["url"], "--title", "T", "--transport", "gitlab", "--json"],
-                    cwd=cwd, capture_output=True, text=True, encoding="utf-8")
-                self.assertEqual(put.returncode, 0, put.stdout + put.stderr)
-                retried = L.create_first(flow, title="T", body="B", retry_key=key,
-                                         parent="42", execute=fake_execute({}))
-                self.assertNotIsInstance(retried, TrackerError, retried)
-                self.assertTrue(retried["retried"])
-                self.assertIsNone(retried["parent"])
-                self.assertEqual((retried.get("degraded") or {}).get("kind"), "parent_not_set")
-
-    def test_failed_record_write_keeps_the_parent_for_the_retry(self) -> None:
-        # fn-334 R9: the issue exists, the record write failed; the recovery
-        # put from the failure details and a same-parent retry link it.
-        from flowctl_tracker.lifecycle import verbs as LV  # noqa: PLC0415
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = Path(tmp)
-            subprocess.run([sys.executable, str(FLOWCTL), "init", "--json"],
-                           cwd=cwd, capture_output=True, check=True)
-            flow = cwd / ".flow"
-            (flow / "config.json").write_text(json.dumps(ln_cfg()), encoding="utf-8")
-            key = L.compute_create_first_key("linear", "T", "B", "WOR-10")
-            real_write = LV.atomic_write_json
-            writes = []
-
-            def flaky(path, data):
-                writes.append(data)
-                if len(writes) == 2:
-                    return TrackerError(ErrorClass.TRANSPORT, "disk full", subtype="write")
-                return real_write(path, data)
-
-            ex = fake_execute({"lifecycle-create": ok({"data": {"issueCreate": {
-                "success": True, "issue": _ln_issue("B")}}})})
-            with mock.patch.object(LV, "atomic_write_json", side_effect=flaky):
-                failed = L.create_first(flow, title="T", body="B", retry_key=key,
-                                        parent="WOR-10", execute=ex)
-            self.assertIsInstance(failed, TrackerError)
-            self.assertEqual(failed.details.get("parent"), "WOR-10")
-            claim = json.loads((flow / "create-first" / f"{key}.json")
-                               .read_text(encoding="utf-8"))
-            self.assertEqual(claim.get("parent"), "WOR-10")
-            d = failed.details
-            put = subprocess.run(
-                [sys.executable, str(FLOWCTL), "sync", "create-first-put",
-                 "--key", key, "--id", d["id"], "--identifier", d["identifier"],
-                 "--url", d["url"], "--title", "T", "--transport", "linear",
-                 "--json"],
-                cwd=cwd, capture_output=True, text=True, encoding="utf-8")
-            self.assertEqual(put.returncode, 0, put.stdout + put.stderr)
-            retried = L.create_first(flow, title="T", body="B", retry_key=key,
-                                     parent="WOR-10", execute=fake_execute({}))
-            self.assertNotIsInstance(retried, TrackerError, retried)
-            self.assertTrue(retried["retried"])
-            self.assertEqual(retried["id"], LN_UUID)
-
     def test_github_create_first_refuses_before_any_request(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = self._flow(tmp, gh_cfg())
@@ -754,7 +600,7 @@ class CreateFirstParent(unittest.TestCase):
 
 
 class LaterOperationsNeverSendTheParent(unittest.TestCase):
-    """R8: once linked, push and status carry no parent field on any tracker."""
+    """R8: once linked, status carries no parent field on any tracker."""
 
     LINKED = {
         "github": (GH_NODE, "#42", _gh_issue),
@@ -767,38 +613,8 @@ class LaterOperationsNeverSendTheParent(unittest.TestCase):
         flow = Path(tmp)
         durable, display, _mk = self.LINKED[provider]
         _write_flow(flow, CFG[provider](), tracker={
-            "id": durable, "identifier": display, "url": "https://x",
-            "linkState": "linked", "parent": "PARENT-1",
-            "mergeBaseFlow": None, "mergeBaseTracker": None,
-            "baseHashFlow": None, "baseHashTracker": None})
+            "id": durable, "identifier": display, "url": "https://x"})
         return flow
-
-    def _read(self, provider: str, body: str) -> Response:
-        issue = self.LINKED[provider][2](body)
-        return ok({"data": {"issue": issue}}) if provider == "linear" else ok(issue)
-
-    def test_body_push_sends_no_parent(self) -> None:
-        for provider in CFG:
-            with self.subTest(provider=provider), \
-                    tempfile.TemporaryDirectory() as tmp:
-                flow = self._linked_flow(tmp, provider)
-                mk = self.LINKED[provider][2]
-                update = {
-                    "linear": ok({"data": {"issueUpdate": {
-                        "success": True, "issue": mk("NEW\n")}}}),
-                    "jira": empty(),
-                }.get(provider, self._read(provider, "NEW\n"))
-                ex = fake_execute({
-                    "sync-body-parent-read": self._read(provider, "old"),
-                    "wire-parent-read": self._read(provider, "old"),
-                    "wire-update": update,
-                    "wire-read": self._read(provider, "NEW\n"),
-                })
-                out = SB.sync_body(flow, "fn-1-demo", flow_file_body="NEW\n",
-                                   direction="push", execute=ex)
-                self.assertEqual(out["kind"], "pushed", f"{provider}: {out}")
-                self.assertEqual(_sent_parent_keys(ex), [], provider)
-                self.assertEqual(_saved(flow)["parent"], "PARENT-1")
 
     def test_status_sends_no_parent(self) -> None:
         gh = dict(_gh_issue("B"), labels=[{"name": "status:todo"}])
@@ -835,63 +651,11 @@ class LaterOperationsNeverSendTheParent(unittest.TestCase):
             with self.subTest(provider=provider), \
                     tempfile.TemporaryDirectory() as tmp:
                 flow = self._linked_flow(tmp, provider)
-                (flow / "tasks").mkdir(parents=True, exist_ok=True)
-                (flow / "tasks" / "fn-1-demo.1.json").write_text(json.dumps({
-                    "id": "fn-1-demo.1", "status": "in_progress",
-                    "spec": "fn-1-demo"}), encoding="utf-8")
                 ex = fake_execute(responses)
-                out = S.status(flow, "fn-1-demo", to="in_progress", execute=ex)
+                out = S.status(flow, "fn-1-demo", to="in_progress",
+                               branch="fn-1-demo", execute=ex)
                 self.assertEqual(out["kind"], "applied", f"{provider}: {out}")
                 self.assertEqual(_sent_parent_keys(ex), [], provider)
-
-
-class SpecCreateRecordsParent(unittest.TestCase):
-    """`spec create --tracker-parent` writes the creation input on the spec."""
-
-    def _run(self, cwd: Path, *args: str) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            [sys.executable, str(FLOWCTL), *args, "--json"],
-            cwd=cwd, capture_output=True, text=True, encoding="utf-8")
-
-    def _spec(self, cwd: Path, spec_id: str) -> dict:
-        return json.loads((cwd / ".flow" / "specs" / f"{spec_id}.json")
-                          .read_text(encoding="utf-8"))
-
-    def test_flow_first_and_linked_mint_carry_the_parent(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = Path(tmp)
-            init = self._run(cwd, "init")
-            self.assertEqual(init.returncode, 0, init.stdout + init.stderr)
-            flow_first = self._run(cwd, "spec", "create", "--title", "Child",
-                                   "--tracker-parent", " PROJ-12 ")
-            self.assertEqual(flow_first.returncode, 0,
-                             flow_first.stdout + flow_first.stderr)
-            spec_id = json.loads(flow_first.stdout)["id"]
-            self.assertEqual(self._spec(cwd, spec_id)["tracker"]["parent"],
-                             "PROJ-12")
-
-            minted = self._run(cwd, "spec", "create", "--title", "Minted",
-                               "--tracker-first", "--tracker-identifier",
-                               "PROJ-13", "--tracker-id", "10013",
-                               "--tracker-parent", "PROJ-12")
-            self.assertEqual(minted.returncode, 0, minted.stdout + minted.stderr)
-            tracker = self._spec(cwd, json.loads(minted.stdout)["id"])["tracker"]
-            self.assertEqual(tracker["parent"], "PROJ-12")
-            self.assertEqual(tracker["identifier"], "PROJ-13")
-
-            plain = self._run(cwd, "spec", "create", "--title", "Plain")
-            self.assertNotIn(
-                "parent", self._spec(cwd, json.loads(plain.stdout)["id"])["tracker"])
-
-    def test_empty_parent_is_refused(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = Path(tmp)
-            self._run(cwd, "init")
-            out = self._run(cwd, "spec", "create", "--title", "Child",
-                            "--tracker-parent", "  ")
-            self.assertNotEqual(out.returncode, 0)
-            self.assertIn("--tracker-parent", out.stdout)
-            self.assertEqual(list((cwd / ".flow" / "specs").glob("*.json")), [])
 
 
 if __name__ == "__main__":
