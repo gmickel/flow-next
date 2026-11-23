@@ -2,7 +2,7 @@
 
 ## Writing
 
-Before writing under `.flow/specs/`, check existing specs across branches with one git command and compare matches by reading. Use `templates/spec.md` in this plugin unless the repo has a root `SPEC.md`, which wins. Read `STRATEGY.md` when present and turn any conflict with its direction into an open question.
+Before writing under `.flow/specs/`, check existing specs across branches with one git command and compare matches by reading. Use `templates/spec.md` beside the router unless the repo has a root `SPEC.md`, which wins. Read `STRATEGY.md` when present and turn any conflict with its direction into an open question.
 
 When intent cannot yet be stated as criteria, draft the spec with its open questions as the decisions and settle those first. Split only by independently shippable outcome, not by size. Tag any requirement the person did not state as `[inferred]`, and keep requirement IDs append-only: a changed requirement gets a new ID.
 

@@ -18,7 +18,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "flow" / "scripts"))
 
 from flowctl_tracker import classify  # noqa: E402
 from flowctl_tracker import lifecycle as L  # noqa: E402
@@ -26,7 +26,7 @@ from flowctl_tracker import spec_store as SS  # noqa: E402
 from flowctl_tracker import status as S  # noqa: E402
 from flowctl_tracker.types import ErrorClass, Response, TrackerError  # noqa: E402
 
-FLOWCTL = ROOT / "scripts" / "edge.py"
+FLOWCTL = ROOT / "skills" / "flow" / "scripts" / "edge.py"
 GH_NODE = "I_kwDOTestNode1"
 GL_ID = 84817009
 LN_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"

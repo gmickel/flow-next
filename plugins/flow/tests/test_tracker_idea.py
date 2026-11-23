@@ -17,13 +17,13 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "flow" / "scripts"))
 
 from flowctl_tracker import classify  # noqa: E402
 from flowctl_tracker import wire as W  # noqa: E402
 from flowctl_tracker.types import ErrorClass, Response, TrackerError  # noqa: E402
 
-FLOWCTL = ROOT / "scripts" / "edge.py"
+FLOWCTL = ROOT / "skills" / "flow" / "scripts" / "edge.py"
 BASE = "https://ex.atlassian.net"
 IDEA_ID = "20007"
 LINK_TYPES = {"issueLinkTypes": [
@@ -158,7 +158,7 @@ class WireReadPointsAtTheReference(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
                 JW, "IDEA_REFERENCE", Path(tmp) / "missing.md"):
             out, _ = self._read(jr_cfg(idea_keys=["IDEAS"]), "IDEAS-7")
-        self.assertEqual(out["idea"]["reference"], "skills/flow/playbooks/tracker.md")
+        self.assertEqual(out["idea"]["reference"], "playbooks/tracker.md")
 
     def test_request_is_byte_identical_with_and_without_the_key(self) -> None:
         _, plain = self._read(jr_cfg(), "IDEAS-7")
@@ -204,7 +204,7 @@ class IdeasAreReadOnly(unittest.TestCase):
     def test_a_configured_delivery_read_loads_no_idea_code(self) -> None:
         probe = (
             "import json, sys\n"
-            f"sys.path.insert(0, {str(ROOT / 'scripts')!r})\n"
+            f"sys.path.insert(0, {str(ROOT / 'skills' / 'flow' / 'scripts')!r})\n"
             "from flowctl_tracker import wire\n"
             "from flowctl_tracker.types import Response\n"
             "body = json.dumps({'id': '10012', 'key': 'PROJ-12', 'fields': {}}).encode()\n"

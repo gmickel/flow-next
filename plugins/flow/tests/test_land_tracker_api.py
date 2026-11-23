@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "flow" / "scripts"))
 
 from flowctl_tracker.resolve_verb import bound_executor  # noqa: E402
 from flowctl_tracker.status.policy import decide, flow_to_normalized  # noqa: E402

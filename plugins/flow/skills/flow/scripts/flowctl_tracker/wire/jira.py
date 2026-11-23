@@ -27,13 +27,13 @@ from . import (
 
 
 #: Read by the agent only on the idea-intake path (fn-330).
-IDEA_REFERENCE = Path(__file__).resolve().parents[3] / "skills" / "flow" / "playbooks" / "tracker.md"
+IDEA_REFERENCE = Path(__file__).resolve().parents[2].parent / "playbooks" / "tracker.md"
 
 
 def idea_reference() -> str:
     """The reference's absolute path when it sits beside `scripts/`, else its
-    path under the plugin root: the output never names a missing file."""
-    return str(IDEA_REFERENCE) if IDEA_REFERENCE.is_file() else "skills/flow/playbooks/tracker.md"
+    path under the skill folder: the output never names a missing file."""
+    return str(IDEA_REFERENCE) if IDEA_REFERENCE.is_file() else "playbooks/tracker.md"
 
 
 def has_idea_source(config: dict) -> bool:

@@ -18,7 +18,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "flow" / "scripts"))
 
 
 def _inserts_scripts_path(source: str) -> bool:
@@ -52,14 +52,14 @@ class TrackerPackageImports(unittest.TestCase):
         r = subprocess.run(
             [sys.executable, "-c",
              "import flowctl_tracker, flowctl_tracker.providers; print('ok')"],
-            cwd=str(ROOT / "scripts"), capture_output=True, text=True, check=False,
+            cwd=str(ROOT / "skills" / "flow" / "scripts"), capture_output=True, text=True, check=False,
         )
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(r.stdout.strip())
 
     def test_package_does_not_import_flowctl(self) -> None:
         """Dependency runs one way: flowctl may use the package, never the reverse."""
-        for f in (ROOT / "scripts" / "flowctl_tracker").rglob("*.py"):
+        for f in (ROOT / "skills" / "flow" / "scripts" / "flowctl_tracker").rglob("*.py"):
             src = f.read_text(encoding="utf-8")
             self.assertNotIn("import flowctl", src, f"{f.name} must not import flowctl")
 

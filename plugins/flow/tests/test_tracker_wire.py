@@ -14,7 +14,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "flow" / "scripts"))
 
 from flowctl_tracker import wire as W  # noqa: E402
 from flowctl_tracker.types import ErrorClass, Response, TrackerError  # noqa: E402
@@ -150,7 +150,7 @@ class LocatorParsing(unittest.TestCase):
 
 class NoLocalState(unittest.TestCase):
     def test_wire_source_imports_no_receipt_and_writes_no_config(self) -> None:
-        wire_dir = ROOT / "scripts" / "flowctl_tracker" / "wire"
+        wire_dir = ROOT / "skills" / "flow" / "scripts" / "flowctl_tracker" / "wire"
         src = "\n".join(p.read_text(encoding="utf-8") for p in sorted(wire_dir.glob("*.py")))
         self.assertNotRegex(src, r"(?m)^\s*(from|import)\s+.*receipt")
         self.assertNotIn("resolve_transaction", src)
@@ -1541,7 +1541,7 @@ class PaginationIsDrainedNeverSilentlyCapped(unittest.TestCase):
 class NoAssertsInProductionPaths(unittest.TestCase):
     def test_wire_module_contains_no_assert_statements(self) -> None:
         import ast
-        wire_dir = ROOT / "scripts" / "flowctl_tracker" / "wire"
+        wire_dir = ROOT / "skills" / "flow" / "scripts" / "flowctl_tracker" / "wire"
         asserts = []
         for path in sorted(wire_dir.glob("*.py")):
             asserts.extend(

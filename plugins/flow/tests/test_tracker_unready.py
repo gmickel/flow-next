@@ -15,7 +15,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "flow" / "scripts"))
 
 from flowctl_tracker import wire as W  # noqa: E402
 from flowctl_tracker.types import ErrorClass, Response, TrackerError  # noqa: E402
@@ -229,7 +229,7 @@ class Unready(unittest.TestCase):
             flow.mkdir()
             (flow / "config.json").write_text("{}", encoding="utf-8")
             run = subprocess.run(
-                [sys.executable, str(ROOT / "scripts" / "edge.py"), "tracker", "wire",
+                [sys.executable, str(ROOT / "skills" / "flow" / "scripts" / "edge.py"), "tracker", "wire",
                  "unready", "--locator", json.dumps(loc(LN_UUID, "FLOW-106")), "--json"],
                 cwd=tmp, capture_output=True, text=True)
         payload = json.loads(run.stdout)

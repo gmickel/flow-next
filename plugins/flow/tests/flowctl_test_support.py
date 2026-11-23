@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-FLOWCTL_SCRIPT = HERE.parent / "scripts" / "edge.py"
+FLOWCTL_SCRIPT = HERE.parent / "skills" / "flow" / "scripts" / "edge.py"
 RUNNER = HERE / "flowctl_runner.py"
 if not RUNNER.is_file():
     raise FileNotFoundError(f"edge test runner not found: {RUNNER}")

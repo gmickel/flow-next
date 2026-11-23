@@ -23,7 +23,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "flow" / "scripts"))
 
 from flowctl_tracker import config_lock as CL  # noqa: E402
 from flowctl_tracker import resolved_cache as RC  # noqa: E402
@@ -631,7 +631,7 @@ class CrossProcessContention(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             flow = Path(td)
             procs = [subprocess.Popen(
-                [sys.executable, "-c", _WORKER, str(ROOT / "scripts"), str(flow), "25"],
+                [sys.executable, "-c", _WORKER, str(ROOT / "skills" / "flow" / "scripts"), str(flow), "25"],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 for _ in range(3)]
             for p in procs:
@@ -647,7 +647,7 @@ class CrossProcessContention(unittest.TestCase):
             # A process that acquires and dies without releasing.
             crasher = (
                 "import sys, os\n"
-                f"sys.path.insert(0, {str(ROOT / 'scripts')!r})\n"
+                f"sys.path.insert(0, {str(ROOT / 'skills' / 'flow' / 'scripts')!r})\n"
                 "from flowctl_tracker.config_lock import config_lock\n"
                 f"lock = config_lock({str(flow)!r})\n"
                 "lock.__enter__()\n"
@@ -907,7 +907,7 @@ class ReclaimerClaimClosesTheCheckToRenameWindow(unittest.TestCase):
         # A claim holder that CRASHES (hard exit, no release call):
         crasher = (
             "import sys, os\n"
-            f"sys.path.insert(0, {str(ROOT / 'scripts')!r})\n"
+            f"sys.path.insert(0, {str(ROOT / 'skills' / 'flow' / 'scripts')!r})\n"
             "from flowctl_tracker import config_lock as CL\n"
             f"claim = CL._acquire_reclaimer_claim(CL._lock_dir({str(self.flow)!r}))\n"
             "assert claim is not None\n"
@@ -925,7 +925,7 @@ class ReclaimerClaimClosesTheCheckToRenameWindow(unittest.TestCase):
         self._stale_owner()
         holder = (
             "import sys, time\n"
-            f"sys.path.insert(0, {str(ROOT / 'scripts')!r})\n"
+            f"sys.path.insert(0, {str(ROOT / 'skills' / 'flow' / 'scripts')!r})\n"
             "from flowctl_tracker import config_lock as CL\n"
             f"claim = CL._acquire_reclaimer_claim(CL._lock_dir({str(self.flow)!r}))\n"
             "assert claim is not None\n"

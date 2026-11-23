@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, urlparse
 
 TESTS = Path(__file__).resolve().parent
 ROOT = TESTS.parent
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "flow" / "scripts"))
 sys.path.insert(0, str(TESTS))
 
 from flowctl_tracker import wire as W  # noqa: E402
@@ -290,7 +290,7 @@ class CliFlagTests(unittest.TestCase):
             flow.mkdir()
             (flow / "config.json").write_text("{}", encoding="utf-8")
             proc = subprocess.run(
-                [sys.executable, str(ROOT / "scripts/edge.py"), "tracker",
+                [sys.executable, str(ROOT / "skills" / "flow" / "scripts" / "edge.py"), "tracker",
                  "wire", "list-open", "--any-lane", "--unlinked", "--json"],
                 cwd=tmp, capture_output=True, text=True)
             self.assertNotIn("unrecognized arguments", proc.stderr)

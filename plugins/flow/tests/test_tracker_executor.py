@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "flow" / "scripts"))
 
 from flowctl_tracker import classify as C  # noqa: E402
 from flowctl_tracker import credentials as CR  # noqa: E402
@@ -382,7 +382,7 @@ class CliRoute(unittest.TestCase):
         self.assertNotIn(body.decode(), " ".join(captured["argv"]))
 
     def test_no_shell_is_used(self) -> None:
-        src = (ROOT / "scripts" / "flowctl_tracker" / "executor.py").read_text()
+        src = (ROOT / "skills" / "flow" / "scripts" / "flowctl_tracker" / "executor.py").read_text()
         self.assertNotIn("shell=True", src)
 
     def test_glab_stdout_warning_does_not_corrupt_json(self) -> None:

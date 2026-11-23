@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling test helpers
 from flowctl_test_support import FLOWCTL_CMD
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "flow" / "scripts"))
 
 from flowctl_tracker import resolve_verb as RV  # noqa: E402
 from flowctl_tracker import states as ST  # noqa: E402

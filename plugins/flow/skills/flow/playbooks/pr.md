@@ -20,4 +20,4 @@ Under `## What changes`, describe the behaviour changes and state each spec requ
 
 Keep bulk mechanical changes (formatting, renames, generated output) in their own commit with the generating command in its message, and give each one line in the body naming the command and commit as safe to skim. Do not read bulk mechanical diffs to describe them: check with a per-file git summary and `git diff -w`, or sample a few files for a PR you did not write.
 
-Push the branch and open the PR via the forge CLI, or `scripts/make-pr-gitlab.sh` / `scripts/make-pr-bitbucket.sh`. Move any linked tracker issue to in review with the PR link (`tracker.md`).
+Push the branch and open the PR via the forge CLI, or `scripts/make-pr-gitlab.sh` / `scripts/make-pr-bitbucket.sh` beside the router. Move any linked tracker issue to in review with the PR link (`tracker.md`).

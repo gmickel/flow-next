@@ -13,7 +13,7 @@ from pathlib import Path
 from test_make_pr_gitlab import GitLabShellCase, answers, recorded
 
 TESTS = Path(__file__).resolve().parent
-SCRIPTS = TESTS.parent / "scripts" / "resolve-pr"
+SCRIPTS = TESTS.parent / "skills" / "flow" / "scripts" / "resolve-pr"
 FIXED = "8ec02af31f716aa23cf68c2adb7ea5c3c1e251e0"   # the f-string thread, fixed in 900c162
 
 
