@@ -1,0 +1,12 @@
+{
+  "name": "flow-dev",
+  "owner": {
+    "name": "Gordon Mickel"
+  },
+  "plugins": [
+    {
+      "name": "flow",
+      "source": "./"
+    }
+  ]
+}
