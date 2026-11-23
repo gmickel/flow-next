@@ -14,7 +14,7 @@ Wait through `edge forge wait`; do not poll by hand. On a forge with no required
 - `failing`: repair CI as above, then wait again.
 - `changes_requested`: handle via `feedback.md`, or stop for the person if unsettled.
 - `review_required`, `blocked`, or `error`: stop and report the reason.
-- `pending`: deadline reached; report running checks and stop.
+- `pending`: while checks are still running, wait again up to a total bound of about 30 minutes unless the person or invocation set another. When that bound is reached, stop and report what is still running; an unattended run ends as `BLOCKED`, safe to run again.
 - `merged`: skip merging and run only after-merge steps.
 - `closed`: stop and report closed unmerged.
 
@@ -30,4 +30,4 @@ Merge only through `edge forge merge`, bound to the reviewed full 40-hex head SH
 
 ## After merge
 
-Commit the spec's merged state if convention calls for it, move any linked tracker issue to done with a short summary (`tracker.md`), and when unattended include `merged=<sha>` in the terminal line (`unattended.md`).
+Move any linked tracker issue to done with a short summary (`tracker.md`), and when unattended include `merged=<sha>` in the terminal line (`unattended.md`).

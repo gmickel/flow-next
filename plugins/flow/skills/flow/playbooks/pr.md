@@ -4,17 +4,17 @@ Commit any spec on the same branch as the code before opening. Write the PR body
 
 ## Body layout
 
-Use these headings in order, omitting empty optional sections:
+Use these headings in order, omitting `## Shape` or `## Tradeoffs` when empty; always keep `## Needs you` (stating in one line when nothing is open):
 
 - `## Why` — intent and user or operator outcome.
 - `## Review focus` — where to start reading, one to three risky or surprising places to check closely, and the feedback wanted. Direct attention (for example, which commits are mechanical and which few files carry behaviour).
 - `## Needs you` — open items as `- Open:` bullets (unmet or deferred requirements, unresolved design calls, unverified checks).
-- `## Shape` — optional compact sketch of the new or changed public surface or key flow.
-- `## What changes` — behaviour changes; every spec requirement as met (with evidence), deferred (with reason), or unmet (also under `## Needs you`); any unrequested changes named explicitly; live proof evidence (or "not verified live" for direct changes); project documents mentioning touched files or names (updated or why not, leaving none false); and one review line stating which model built, which reviewed (same or different family), the verdict, rounds, and findings declined.
+- `## Shape` — compact sketch of the new or changed public surface or key flow.
+- `## What changes` — behaviour changes, requirement coverage, proof, docs, and the review line.
 - `## Reading order` — logical review groups with safe-to-skim groups separated; no file lists and no line totals.
 - `## Tradeoffs` — rejected alternatives and decisions made.
 
-Requirement coverage is a reporting target: still open the PR when items stay deferred or unmet.
+Under `## What changes`, describe the behaviour changes and state each spec requirement as met with evidence, deferred with a reason, or unmet (placing deferred and unmet items under `## Needs you`; this is a reporting target, so still open the PR). Name any unrequested changes explicitly and include live proof evidence (or "not verified live" for direct changes). List project documents mentioning touched files or names, updating each or explaining why not so none is left false. Close the section with one line naming the building model, the reviewing model (same or different family), the verdict, rounds, and findings declined.
 
 ## Mechanical changes and opening
 
