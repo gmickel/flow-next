@@ -10,11 +10,11 @@ Fill in the context header of `../reviewer-brief.md` (intent, out of scope, chec
 
 ## Fix loop
 
-Check every finding: fix it, or decline it with a reason. Any finding without a failing scenario is a note. Never write a verdict yourself, and do not agree just to end the loop. If review has grown the diff, cut before adding.
+Check every finding: fix it, or decline it with a reason. Any finding without a failing scenario is FYI. Never write a verdict yourself, and do not agree just to end the loop. If review has grown the diff, cut before adding.
 
 Record fixed and declined findings by id (`S1`, `S2`, ...) and the reviewer's verdict in each fix commit message; that commit count is the round count, with no other record. Continue later rounds in the same reviewer session wherever the harness can resume it; otherwise pass a fresh reviewer the findings ledger from the commit messages.
 
-Stop at eight rounds as a hard cap—reaching it is not approval. Escalate any item disputed twice to the person. `MAJOR_RETHINK` stops the loop; `NEEDS_HUMAN` goes to the person.
+Stop at eight rounds as a hard cap—reaching it is not approval; end the loop and hand the open findings to the person. Escalate any item disputed twice to the person. `MAJOR_RETHINK` stops the loop; `NEEDS_HUMAN` goes to the person.
 
 ## Other review routes
 

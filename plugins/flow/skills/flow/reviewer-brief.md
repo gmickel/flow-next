@@ -42,6 +42,14 @@ On a later round, answer each prior finding first, then look again at the change
 - **Spec review:** Read the spec and the code it will touch before building; check feasibility against the current codebase, testable and complete acceptance criteria, missing failure modes or boundaries, and overengineering, without flagging unrelated existing code.
 - **Goal final review:** Read the goal spec, its criteria, boundaries, and child list, then inspect the resulting repository state and evidence as a whole to verify every criterion is met and no child contradicts another or the goal's boundaries.
 
+## Lenses
+
+When assigned a lens, focus your attention there without excusing a blocker seen outside it:
+
+- **Correctness:** behaviour in the scenarios the request covers and their edge cases.
+- **Contracts:** interfaces the change exposes or consumes, including data shapes, persisted data, and callers' expectations.
+- **Integration:** how the change fits what surrounds it, including other callers, configuration, documents, and the rest of the system.
+
 ## Review context (filled by the writer)
 
 - **Kind:** `change | spec | goal-final`
