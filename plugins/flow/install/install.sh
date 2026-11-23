@@ -1,6 +1,7 @@
 #!/bin/sh
-# Copy the Flow-Next (preview) plugin for hosts without a marketplace install:
-# opencode, muse, or antigravity. Copies files unchanged; leaves tests behind.
+# Copy the self-contained Flow-Next (preview) skill folder for hosts without a
+# marketplace install: opencode, muse, or antigravity. Leaves tests and shared
+# directories untouched.
 set -eu
 
 usage() {
@@ -16,36 +17,20 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PLUGIN_DIR="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
 
 case "$HOST" in
-    opencode)
-        [ -n "$DEST" ] || DEST="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
-        COPY_MANIFEST=0
-        ;;
-    muse)
-        [ -n "$DEST" ] || DEST="${XDG_CONFIG_HOME:-$HOME/.config}/muse"
-        COPY_MANIFEST=0
-        ;;
-    antigravity)
-        [ -n "$DEST" ] || DEST="$HOME/.gemini/config/plugins/flow"
-        COPY_MANIFEST=1
-        ;;
-    -h|--help)
-        usage
-        ;;
-    *)
-        echo "Unknown host: $HOST" >&2
-        usage
-        ;;
+    opencode)    [ -n "$DEST" ] || DEST="${XDG_CONFIG_HOME:-$HOME/.config}/opencode" ;;
+    muse)        [ -n "$DEST" ] || DEST="${XDG_CONFIG_HOME:-$HOME/.config}/muse" ;;
+    antigravity) [ -n "$DEST" ] || DEST="$HOME/.gemini/config/plugins/flow" ;;
+    -h|--help)   usage ;;
+    *)           echo "Unknown host: $HOST" >&2; usage ;;
 esac
 
 mkdir -p "$DEST/skills"
-rm -rf "$DEST/skills/flow" "$DEST/scripts" "$DEST/templates"
+rm -rf "$DEST/skills/flow"
 cp -Rp "$PLUGIN_DIR/skills/flow" "$DEST/skills/flow"
-cp -Rp "$PLUGIN_DIR/scripts" "$DEST/scripts"
-cp -Rp "$PLUGIN_DIR/templates" "$DEST/templates"
-if [ "$COPY_MANIFEST" -eq 1 ]; then
+find "$DEST/skills/flow" \( -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store' \) -prune -exec rm -rf {} +
+
+if [ "$HOST" = "antigravity" ]; then
     cp -p "$PLUGIN_DIR/plugin.json" "$DEST/plugin.json"
 fi
 
-find "$DEST" \( -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store' \) -prune -exec rm -rf {} +
-
-echo "Copied flow plugin for $HOST to $DEST"
+echo "Copied flow skill for $HOST to $DEST/skills/flow"
