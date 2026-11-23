@@ -233,6 +233,26 @@ def cmd_forge_approvals(args: argparse.Namespace) -> None:
     print(json.dumps([forge._pr_approval(row) for row in rows]))
 
 
+def cmd_forge_wait(args: argparse.Namespace) -> None:
+    import forge  # noqa: PLC0415
+
+    if args.timeout < 1 or args.interval < 1:
+        error_exit("--timeout and --interval must be >= 1 second")
+    out = forge.forge_wait(
+        _repo_path(args.repo), args.number, timeout_s=args.timeout, interval_s=args.interval
+    )
+    print(json.dumps(out))
+    sys.exit(1 if out["state"] == "error" else 0)
+
+
+def cmd_forge_merge(args: argparse.Namespace) -> None:
+    import forge  # noqa: PLC0415
+
+    out = forge.forge_merge(_repo_path(args.repo), args.number, args.head)
+    print(json.dumps(out))
+    sys.exit(0 if out["merged"] else 1)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="edge",
@@ -425,6 +445,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_fa.add_argument("--head", required=True)
     p_fa.add_argument("--repo", default=None)
     p_fa.set_defaults(func=cmd_forge_approvals)
+
+    p_fw = forge_sub.add_parser("wait", help="Wait for PR/MR checks and review to settle or deadline")
+    p_fw.add_argument("number", type=int)
+    p_fw.add_argument("--timeout", type=int, default=480, help="Deadline in seconds (default: 480)")
+    p_fw.add_argument("--interval", type=int, default=15, help="Poll interval in seconds (default: 15)")
+    p_fw.add_argument("--repo", default=None)
+    p_fw.set_defaults(func=cmd_forge_wait)
+
+    p_fm = forge_sub.add_parser("merge", help="Squash-merge a PR/MR bound to a specific head SHA")
+    p_fm.add_argument("number", type=int)
+    p_fm.add_argument("--head", required=True, help="Expected full 40-hex head commit SHA")
+    p_fm.add_argument("--repo", default=None)
+    p_fm.set_defaults(func=cmd_forge_merge)
 
     return parser
 

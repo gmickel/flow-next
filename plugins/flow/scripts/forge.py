@@ -193,25 +193,27 @@ def _gitlab_list_prs(repo: Path, origin: "ForgeOrigin", head: Optional[str], *,
 _GITLAB_APPROVAL_PENDING = {"not_approved", "approvals_syncing", "requested_changes"}
 
 
-def _gitlab_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
-    """Whether merge request `number` can merge now, in GitLab's own terms.
-
-    `pipeline` is the head pipeline's status for the current head only, and
-    `approval` is approved, required or unknown. Anything unreadable is not
-    green, not approved and not ready.
-    """
+def _gitlab_readiness_detail(repo: Path, origin: "ForgeOrigin", number: int) -> tuple[dict, dict]:
+    """Read GitLab MR readiness plus state/pipeline metadata for `forge wait`."""
     unread = {"head_sha": None, "pipeline": None, "merge_status": None, "approval": "unknown",
               "squash_allowed": None, "green": False, "ready": False}
+    meta: dict[str, Any] = {"state": None, "draft": False, "merge_commit": None, "pipeline_id": None}
     if not origin.project:
-        return unread
+        return unread, meta
     deadline = time.monotonic() + _FORGE_PROBE_TIMEOUT_S
     mr = _glab_get(origin, f"{_gitlab_project(origin)}/merge_requests/{number}", deadline)
+    if isinstance(mr, dict) and isinstance(mr.get("state"), str):
+        meta["state"] = mr["state"]
+        meta["draft"] = mr.get("draft") is True
+        meta["merge_commit"] = mr.get("merge_commit_sha") or mr.get("squash_commit_sha")
+        if mr["state"] in {"merged", "closed"}:
+            return {**unread, "head_sha": mr.get("sha") if isinstance(mr.get("sha"), str) else None}, meta
     project = _glab_get(origin, _gitlab_project(origin), deadline)
     if not (isinstance(mr, dict) and isinstance(mr.get("sha"), str) and mr["sha"]
             and isinstance(mr.get("detailed_merge_status"), str)
             and isinstance(mr.get("head_pipeline"), (dict, type(None)))
             and isinstance(project, dict) and isinstance(project.get("squash_option"), str)):
-        return unread
+        return unread, meta
     head, status = mr["sha"], mr["detailed_merge_status"]
     # GitLab leaves `head_pipeline` out when the caller cannot see pipelines.
     pipeline = mr.get("head_pipeline") or {}
@@ -226,12 +228,25 @@ def _gitlab_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
                 and head in commit["parent_ids"]):
             ran = pipeline.get("status")
     ran = ran if isinstance(ran, str) else None
+    if ran is not None and isinstance(pipeline.get("id"), int):
+        meta["pipeline_id"] = pipeline["id"]
     approval = ("approved" if status == "mergeable"
                 else "required" if status in _GITLAB_APPROVAL_PENDING else "unknown")
     squash = project["squash_option"] != "never"
-    return {"head_sha": head, "pipeline": ran, "merge_status": status, "approval": approval,
-            "squash_allowed": squash, "green": ran == "success",
-            "ready": ran == "success" and status == "mergeable" and squash}
+    readiness = {"head_sha": head, "pipeline": ran, "merge_status": status, "approval": approval,
+                 "squash_allowed": squash, "green": ran == "success",
+                 "ready": ran == "success" and status == "mergeable" and squash}
+    return readiness, meta
+
+
+def _gitlab_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
+    """Whether merge request `number` can merge now, in GitLab's own terms.
+
+    `pipeline` is the head pipeline's status for the current head only, and
+    `approval` is approved, required or unknown. Anything unreadable is not
+    green, not approved and not ready.
+    """
+    return _gitlab_readiness_detail(repo, origin, number)[0]
 
 
 def _gitlab_merge_rows(repo: Path, origin: "ForgeOrigin", branch: str) -> Optional[tuple]:
@@ -422,36 +437,39 @@ def _bitbucket_list_prs(repo: Path, origin: "ForgeOrigin", head: Optional[str], 
 _BITBUCKET_BUILD_ORDER = ("FAILED", "STOPPED", "INPROGRESS", "SUCCESSFUL")
 
 
-def _bitbucket_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
-    """Whether pull request `number` can merge now, in Bitbucket's own terms.
-
-    `build` is the worst build status reported on the current head (null when none is),
-    `approval` is approved, changes_requested, none or unknown, and `merge_status` is clean
-    or the first of Bitbucket's own merge checks that fails. Anything unreadable is not
-    green, not approved and not ready; requested changes, a draft or a merge strategy list
-    without squash are never ready.
-    """
+def _bitbucket_readiness_detail(repo: Path, origin: "ForgeOrigin", number: int) -> tuple[dict, dict]:
+    """Read Bitbucket PR readiness plus state/check names for `forge wait`."""
     unread = {"head_sha": None, "build": None, "merge_status": None, "approval": "unknown",
               "squash_allowed": None, "green": False, "ready": False}
+    meta: dict[str, Any] = {"state": None, "draft": False, "merge_commit": None,
+                            "failing_checks": [], "running_checks": []}
     if not (origin.project and re.fullmatch(r"[^/\s?#%]+/[^/\s?#%]+", origin.project)):
-        return unread
+        return unread, meta
     deadline = time.monotonic() + _FORGE_PROBE_TIMEOUT_S
     context = _bkt_context(deadline)
     if context is None:
-        return unread
+        return unread, meta
     pulls = f"/repositories/{origin.project}/pullrequests/{number}"
     pr = _bkt(["--context", context, "api", f"{pulls}?fields=%2Bdestination.branch.merge_strategies"], deadline)
+    pr_state = _field(pr, "state")
+    if isinstance(pr_state, str) and pr_state in _BITBUCKET_PR_STATES:
+        meta["state"] = _BITBUCKET_PR_STATES[pr_state]
+        meta["merge_commit"] = _field(pr, "merge_commit", "hash")
+        if pr_state != "OPEN":
+            short_closed = _field(pr, "source", "commit", "hash")
+            return {**unread, "head_sha": short_closed if isinstance(short_closed, str) else None}, meta
     strategies = _field(pr, "destination", "branch", "merge_strategies")
     people = _field(pr, "participants")
-    if not (_field(pr, "state") == "OPEN" and isinstance(_field(pr, "draft"), bool)
+    if not (pr_state == "OPEN" and isinstance(_field(pr, "draft"), bool)
             and isinstance(strategies, list) and all(isinstance(s, str) for s in strategies)
             and isinstance(people, list) and all(isinstance(p, dict) for p in people)
             and re.fullmatch(r"[0-9a-f]{7,40}", str(_field(pr, "source", "commit", "hash")))):
-        return unread
+        return unread, meta
+    meta["draft"] = pr["draft"]
     short = pr["source"]["commit"]["hash"]
     full = _bitbucket_full_shas(repo, context, origin, {short}, deadline)
     if full is None:
-        return unread
+        return unread, meta
     head = full[short]
     statuses = _bkt_pages(context, f"/repositories/{origin.project}/commit/{head}/statuses?pagelen=100", deadline)
     # A complete listing that holds Bitbucket's git mergeability answer; anything less is unread.
@@ -460,7 +478,11 @@ def _bitbucket_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict
             _field(s, "commit", "hash") == head and _field(s, "state") in _BITBUCKET_BUILD_ORDER for s in statuses) or not all(
             isinstance(_field(c, "status"), str) and isinstance(_field(c, "blocking"), bool) for c in checks) or not any(
             c["type"] == "git_mergeability_check" for c in checks if isinstance(c.get("type"), str)):
-        return {**unread, "head_sha": head}
+        return {**unread, "head_sha": head}, meta
+    meta["failing_checks"] = [str(s.get("name") or s.get("key") or "build")
+                              for s in statuses if s["state"] in {"FAILED", "STOPPED"}]
+    meta["running_checks"] = [str(s.get("name") or s.get("key") or "build")
+                              for s in statuses if s["state"] == "INPROGRESS"]
     build = next((state for state in _BITBUCKET_BUILD_ORDER if any(s["state"] == state for s in statuses)), None)
     failing = next((c for c in checks if c["blocking"] or c["status"] != "PASSED"), None)
     merge_status = "clean" if failing is None else str(failing.get("reason") or failing.get("type") or "blocked")
@@ -473,10 +495,23 @@ def _bitbucket_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict
         approval = "approved" if any(p["approved"] for p in people) else "none"
     squash = "squash" in strategies
     green = build == "SUCCESSFUL"
-    return {"head_sha": head, "build": build, "merge_status": merge_status, "approval": approval,
-            "squash_allowed": squash, "green": green,
-            "ready": green and merge_status == "clean" and squash and not pr["draft"]
-                     and approval in {"approved", "none"}}
+    readiness = {"head_sha": head, "build": build, "merge_status": merge_status, "approval": approval,
+                 "squash_allowed": squash, "green": green,
+                 "ready": green and merge_status == "clean" and squash and not pr["draft"]
+                          and approval in {"approved", "none"}}
+    return readiness, meta
+
+
+def _bitbucket_readiness(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
+    """Whether pull request `number` can merge now, in Bitbucket's own terms.
+
+    `build` is the worst build status reported on the current head (null when none is),
+    `approval` is approved, changes_requested, none or unknown, and `merge_status` is clean
+    or the first of Bitbucket's own merge checks that fails. Anything unreadable is not
+    green, not approved and not ready; requested changes, a draft or a merge strategy list
+    without squash are never ready.
+    """
+    return _bitbucket_readiness_detail(repo, origin, number)[0]
 
 
 def _bitbucket_merge_rows(repo: Path, origin: "ForgeOrigin", branch: str) -> Optional[tuple]:
@@ -508,16 +543,273 @@ def _bitbucket_merge_rows(repo: Path, origin: "ForgeOrigin", branch: str) -> Opt
     return rows, files
 
 
+# --- Wait and merge verbs (GitHub, GitLab, Bitbucket) ---
+_WAIT_DEFAULT_TIMEOUT_S = 480   # 8 min: leaves margin under typical 10-min agent shell caps
+_WAIT_DEFAULT_INTERVAL_S = 15
+_FORGE_MERGE_TIMEOUT_S = 30
+_FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_GH_FAILING = {"FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE", "ERROR"}
+_GL_PENDING_PIPELINES = {"created", "waiting_for_resource", "preparing", "pending", "running", "scheduled"}
+_GL_PENDING_MERGE = {"checking", "unchecked", "preparing", "approvals_syncing"}
+
+
+def _wait_row(state: str, head_sha: Optional[str], reason: str, *,
+              failing: Optional[list[str]] = None, running: Optional[list[str]] = None) -> dict:
+    return {"state": state, "head_sha": head_sha, "failing_checks": failing or [],
+            "running_checks": running or [], "reason": reason}
+
+
+def _merge_row(merged: bool, reason: str, message: str, *, merge_commit: Optional[str] = None) -> dict:
+    return {"merged": merged, "merge_commit": merge_commit, "reason": reason, "message": message}
+
+
+def _first_line(text: str, fallback: str) -> str:
+    return next((line.strip() for line in (text or "").splitlines() if line.strip()), fallback)
+
+
+def _run_forge_cmd(argv: list[str], *, cwd: Optional[Path] = None, timeout: float,
+                   env: Optional[dict[str, str]] = None) -> tuple[Optional[subprocess.CompletedProcess], str]:
+    try:
+        proc = subprocess.run(argv, stdin=subprocess.DEVNULL, cwd=cwd, capture_output=True,
+                              text=True, timeout=timeout, env=env, check=False)
+        return proc, ""
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, f"{argv[0]} failed: {exc}"
+
+
+def _github_repo_args(origin: "ForgeOrigin") -> list[str]:
+    if not origin.project:
+        return []
+    slug = f"{origin.host}/{origin.project}" if origin.host and origin.host != "github.com" else origin.project
+    return ["--repo", slug]
+
+
+def _github_pr_view(repo: Path, origin: "ForgeOrigin", number: int, fields: str) -> tuple[Optional[dict], str]:
+    proc, err = _run_forge_cmd(
+        ["gh", "pr", "view", str(number), *_github_repo_args(origin), "--json", fields],
+        cwd=repo, timeout=_FORGE_PROBE_TIMEOUT_S)
+    if proc is None:
+        return None, err
+    if proc.returncode != 0:
+        return None, _first_line(proc.stderr or proc.stdout, f"gh exit {proc.returncode}")
+    try:
+        data = json.loads(proc.stdout)
+    except ValueError:
+        return None, "unreadable gh pr view output"
+    return (data, "") if isinstance(data, dict) else (None, "unexpected gh pr view output")
+
+
+def _github_wait_probe(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
+    data, err = _github_pr_view(
+        repo, origin, number,
+        "state,headRefOid,mergeable,mergeStateStatus,reviewDecision,isDraft,statusCheckRollup,mergeCommit")
+    if data is None:
+        return _wait_row("error", None, err)
+    head = data.get("headRefOid") if isinstance(data.get("headRefOid"), str) else None
+    pr_state = str(data.get("state") or "").upper()
+    if pr_state == "MERGED":
+        mc = _field(data, "mergeCommit", "oid")
+        return _wait_row("merged", head, f"merged ({mc})" if mc else "merged")
+    if pr_state == "CLOSED":
+        return _wait_row("closed", head, "pull request is closed")
+    failing, running = [], []
+    for item in data.get("statusCheckRollup") or []:
+        if not isinstance(item, dict):
+            continue
+        if "status" in item or "conclusion" in item:
+            name = str(item.get("name") or item.get("workflowName") or "check")
+            if str(item.get("status") or "").upper() != "COMPLETED":
+                running.append(name)
+            elif str(item.get("conclusion") or "").upper() in _GH_FAILING:
+                failing.append(name)
+        else:
+            name, st = str(item.get("context") or "status"), str(item.get("state") or "").upper()
+            if st in {"PENDING", "EXPECTED"}:
+                running.append(name)
+            elif st in {"FAILURE", "ERROR"}:
+                failing.append(name)
+    if failing:
+        return _wait_row("failing", head, f"{len(failing)} check(s) failed", failing=failing, running=running)
+    if running:
+        return _wait_row("pending", head, f"{len(running)} check(s) running", running=running)
+    mergeable, merge_state = str(data.get("mergeable") or "").upper(), str(data.get("mergeStateStatus") or "").upper()
+    review = str(data.get("reviewDecision") or "").upper()
+    if mergeable == "UNKNOWN" or merge_state == "UNKNOWN":
+        return _wait_row("pending", head, "mergeability computing")
+    if mergeable == "CONFLICTING" or merge_state == "DIRTY":
+        return _wait_row("blocked", head, "merge conflict")
+    if review in {"CHANGES_REQUESTED", "REVIEW_REQUIRED"}:
+        return _wait_row(review.lower(), head, review.lower().replace("_", " "))
+    for cond, reason in ((data.get("isDraft") is True, "pull request is draft"),
+                         (merge_state == "BEHIND", "branch is behind base"),
+                         (merge_state == "BLOCKED", "blocked by branch rules")):
+        if cond:
+            return _wait_row("blocked", head, reason)
+    return _wait_row("ready", head, "checks green and mergeable")
+
+
+def _gitlab_wait_probe(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
+    r, meta = _gitlab_readiness_detail(repo, origin, number)
+    head = r["head_sha"]
+    if meta["state"] in {"merged", "closed"}:
+        mc = meta["merge_commit"]
+        return _wait_row(meta["state"], head, f"merged ({mc})" if meta["state"] == "merged" and mc else f"merge request is {meta['state']}")
+    if head is None or r["merge_status"] is None:
+        return _wait_row("error", head, "unreadable GitLab merge request")
+    if meta["state"] == "locked":
+        return _wait_row("pending", head, "merge request locked mid-merge")
+    pipe, ms = r["pipeline"], r["merge_status"]
+    if pipe in {"failed", "canceled"}:
+        failing: list[str] = []
+        if pipe == "failed" and meta["pipeline_id"] is not None:
+            jobs = _glab_get(origin, f"{_gitlab_project(origin)}/pipelines/{meta['pipeline_id']}/jobs?scope=failed",
+                             time.monotonic() + _FORGE_PROBE_TIMEOUT_S)
+            if isinstance(jobs, list):
+                failing = [str(j["name"]) for j in jobs if isinstance(j, dict) and j.get("name")]
+        return _wait_row("failing", head, f"pipeline {pipe}", failing=failing or [f"pipeline ({pipe})"])
+    if pipe in _GL_PENDING_PIPELINES:
+        return _wait_row("pending", head, f"pipeline {pipe}", running=[f"pipeline ({pipe})"])
+    if ms in _GL_PENDING_MERGE:
+        return _wait_row("pending", head, f"merge status {ms}")
+    if ms == "requested_changes":
+        return _wait_row("changes_requested", head, "changes requested")
+    if ms == "not_approved" or r["approval"] == "required":
+        return _wait_row("review_required", head, "review approval required")
+    for cond, reason in ((meta["draft"], "merge request is draft"),
+                         (ms == "conflict", "merge conflict"),
+                         (ms == "need_rebase", "rebase required"),
+                         (r["squash_allowed"] is False, "squash merge disallowed"),
+                         (pipe in {"manual", "skipped"} or pipe is None, f"pipeline {pipe or 'missing'}")):
+        if cond:
+            return _wait_row("blocked", head, reason)
+    return _wait_row("ready", head, "pipeline green and mergeable") if r["ready"] else _wait_row("blocked", head, f"merge status {ms}")
+
+
+def _bitbucket_wait_probe(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
+    r, meta = _bitbucket_readiness_detail(repo, origin, number)
+    head = r["head_sha"]
+    if meta["state"] in {"MERGED", "CLOSED"}:
+        st, mc = meta["state"].lower(), meta["merge_commit"]
+        return _wait_row(st, head, f"merged ({mc})" if st == "merged" and mc else f"pull request is {st}")
+    if head is None or r["merge_status"] is None:
+        return _wait_row("error", head, "unreadable Bitbucket pull request")
+    if meta["failing_checks"]:
+        return _wait_row("failing", head, f"{len(meta['failing_checks'])} check(s) failed",
+                         failing=meta["failing_checks"], running=meta["running_checks"])
+    if meta["running_checks"]:
+        return _wait_row("pending", head, f"{len(meta['running_checks'])} check(s) running",
+                         running=meta["running_checks"])
+    if r["approval"] == "changes_requested":
+        return _wait_row("changes_requested", head, "changes requested")
+    for cond, reason in ((r["approval"] == "unknown", "approval state unknown"),
+                         (meta["draft"], "pull request is draft"),
+                         (r["squash_allowed"] is False, "squash merge disallowed"),
+                         (r["merge_status"] != "clean", f"merge check failed: {r['merge_status']}"),
+                         (r["build"] is None, "no build status reported on head")):
+        if cond:
+            return _wait_row("blocked", head, reason)
+    return _wait_row("ready", head, "build green and mergeable")
+
+
+def _github_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str) -> dict:
+    proc, err = _run_forge_cmd(
+        ["gh", "pr", "merge", str(number), *_github_repo_args(origin), "--squash", "--match-head-commit", head],
+        cwd=repo, timeout=_FORGE_MERGE_TIMEOUT_S)
+    if proc is None:
+        return _merge_row(False, "error", err)
+    detail = _first_line(proc.stderr or proc.stdout, f"gh exit {proc.returncode}")
+    after, view_err = _github_pr_view(repo, origin, number, "state,headRefOid,mergeCommit,mergeQueueEntry")
+    if after is not None:
+        if str(after.get("state") or "").upper() == "MERGED" and _field(after, "mergeCommit", "oid"):
+            return _merge_row(True, "merged", "squash merged", merge_commit=after["mergeCommit"]["oid"])
+        if after.get("mergeQueueEntry") is not None:
+            return _merge_row(False, "queued", "added to merge queue")
+        if isinstance(after.get("headRefOid"), str) and after["headRefOid"] != head:
+            return _merge_row(False, "head_moved", f"head moved to {after['headRefOid']}")
+    low = detail.lower()
+    if proc.returncode != 0:
+        reason = "head_moved" if ("head" in low and ("match" in low or "modified" in low)) else "not_mergeable"
+        return _merge_row(False, reason, detail)
+    return _merge_row(False, "error", view_err or "merge not confirmed by post-merge read")
+
+
+def _gitlab_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str) -> dict:
+    if not origin.project:
+        return _merge_row(False, "error", "origin project unknown")
+    env = {**os.environ, "GITLAB_HOST": origin.host} if origin.host else None
+    proc, err = _run_forge_cmd(
+        ["glab", "api", "-X", "PUT", f"{_gitlab_project(origin)}/merge_requests/{number}/merge",
+         "-F", "squash=true", "-F", "should_remove_source_branch=true", "-f", f"sha={head}"],
+        cwd=repo, timeout=_FORGE_MERGE_TIMEOUT_S, env=env)
+    if proc is None:
+        return _merge_row(False, "error", err)
+    if proc.returncode != 0:
+        detail = _first_line(proc.stderr or proc.stdout, f"glab exit {proc.returncode}")
+        low = (proc.stderr + "\n" + proc.stdout).lower()
+        return _merge_row(False, "head_moved" if ("409" in low or "sha does not match" in low) else "not_mergeable", detail)
+    after = _glab_get(origin, f"{_gitlab_project(origin)}/merge_requests/{number}",
+                      time.monotonic() + _FORGE_PROBE_TIMEOUT_S)
+    mc = after.get("merge_commit_sha") or after.get("squash_commit_sha") if isinstance(after, dict) else None
+    if isinstance(after, dict) and after.get("state") == "merged" and isinstance(mc, str) and mc:
+        return _merge_row(True, "merged", "squash merged", merge_commit=mc)
+    return _merge_row(False, "error", "merge not confirmed by post-merge read")
+
+
+def _bitbucket_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str) -> dict:
+    if not (origin.project and re.fullmatch(r"[^/\s?#%]+/[^/\s?#%]+", origin.project)):
+        return _merge_row(False, "error", "origin project unknown")
+    deadline = time.monotonic() + _FORGE_MERGE_TIMEOUT_S
+    context = _bkt_context(deadline)
+    if context is None:
+        return _merge_row(False, "error", "no Bitbucket Cloud bkt context")
+    pr_path = f"/repositories/{origin.project}/pullrequests/{number}"
+    before = _bkt(["--context", context, "api", pr_path], deadline)
+    if not isinstance(before, dict):
+        return _merge_row(False, "error", "unreadable Bitbucket pull request")
+    if before.get("state") != "OPEN":
+        return _merge_row(False, "not_mergeable", f"pull request state is {before.get('state')!r}")
+    short = _field(before, "source", "commit", "hash")
+    full = (_bitbucket_full_shas(repo, context, origin, {short}, deadline)
+            if isinstance(short, str) and re.fullmatch(r"[0-9a-f]{7,40}", short) else None)
+    if full is None:
+        return _merge_row(False, "error", "could not resolve full head SHA")
+    if full[short] != head:
+        return _merge_row(False, "head_moved", f"head moved to {full[short]}")
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return _merge_row(False, "error", "merge timed out before POST")
+    proc, err = _run_forge_cmd(
+        ["bkt", "--context", context, "api", f"{pr_path}/merge", "-X", "POST", "-d",
+         '{"merge_strategy":"squash","close_source_branch":true}'],
+        timeout=remaining)
+    if proc is None:
+        return _merge_row(False, "error", err)
+    if proc.returncode != 0:
+        return _merge_row(False, "not_mergeable", _first_line(proc.stderr or proc.stdout, f"bkt exit {proc.returncode}"))
+    after = _bkt(["--context", context, "api", pr_path], time.monotonic() + _FORGE_PROBE_TIMEOUT_S)
+    mc = _field(after, "merge_commit", "hash")
+    if isinstance(after, dict) and after.get("state") == "MERGED" and isinstance(mc, str) and mc:
+        merged_head = _field(after, "source", "commit", "hash")
+        if isinstance(merged_head, str) and not head.startswith(merged_head):
+            return _merge_row(True, "merged_head_moved",
+                              f"merged, but head moved during merge (expected {head[:12]}, merged {merged_head})",
+                              merge_commit=mc)
+        return _merge_row(True, "merged", "squash merged", merge_commit=mc)
+    return _merge_row(False, "error", "merge not confirmed by post-merge read")
+
+
 # Forge name -> its reads. A forge claims an origin host through `owns_host`;
 # an adapter may lack a read, and its callers then report that read as
 # unsupported on this forge.
 FORGE_ADAPTERS: dict[str, dict[str, Any]] = {
     "github": {"owns_host": _github_owns_host, "list_prs": _github_list_prs,
-               "approval_rows": _gh_pr_rows},
+               "approval_rows": _gh_pr_rows, "wait_probe": _github_wait_probe, "merge": _github_merge},
     "gitlab": {"owns_host": _gitlab_owns_host, "list_prs": _gitlab_list_prs,
-               "readiness": _gitlab_readiness, "merge_rows": _gitlab_merge_rows},
+               "readiness": _gitlab_readiness, "merge_rows": _gitlab_merge_rows,
+               "wait_probe": _gitlab_wait_probe, "merge": _gitlab_merge},
     "bitbucket": {"list_prs": _bitbucket_list_prs, "readiness": _bitbucket_readiness,
-                  "merge_rows": _bitbucket_merge_rows},
+                  "merge_rows": _bitbucket_merge_rows,
+                  "wait_probe": _bitbucket_wait_probe, "merge": _bitbucket_merge},
 }
 _FORGE_HOSTS = {"github.com": "github", "ssh.github.com": "github", "gitlab.com": "gitlab",
                 "bitbucket.org": "bitbucket", "ssh.bitbucket.org": "bitbucket", "altssh.bitbucket.org": "bitbucket"}
@@ -619,6 +911,35 @@ def forge_readiness(repo: Path, number: int) -> Optional[dict]:
     """Whether open PR/MR `number` can merge now; None when the forge has no such read."""
     read, _, origin = _forge_read(repo, "readiness")
     return read(repo, origin, number) if read else None
+
+
+def forge_wait(repo: Path, number: int, *, timeout_s: float = _WAIT_DEFAULT_TIMEOUT_S,
+               interval_s: float = _WAIT_DEFAULT_INTERVAL_S,
+               monotonic: Any = time.monotonic, sleep: Any = time.sleep) -> dict:
+    """Wait until PR/MR `number` settles (ready, failing, review, blocked, closed, merged) or deadline."""
+    probe, forge, origin = _forge_read(repo, "wait_probe")
+    if probe is None:
+        return _wait_row("error", None, f"forge wait is unsupported on {forge}")
+    deadline = monotonic() + max(0.0, float(timeout_s))
+    while True:
+        row = probe(repo, origin, number)
+        if row["state"] != "pending":
+            return row
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return {**row, "reason": f"deadline reached ({row['reason']})"}
+        sleep(min(float(interval_s), remaining))
+
+
+def forge_merge(repo: Path, number: int, head: str) -> dict:
+    """One squash merge of PR/MR `number`, bound to full 40-hex commit `head`."""
+    head_norm = (head or "").strip().lower()
+    if not _FULL_SHA_RE.fullmatch(head_norm):
+        return _merge_row(False, "invalid_head", f"expected full 40-hex commit SHA, got {head!r}")
+    merge_fn, forge, origin = _forge_read(repo, "merge")
+    if merge_fn is None:
+        return _merge_row(False, "error", f"forge merge is unsupported on {forge}")
+    return merge_fn(repo, origin, number, head_norm)
 
 
 def _forge_merge_read(branch: str) -> Any:
