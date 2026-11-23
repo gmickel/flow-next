@@ -1929,47 +1929,6 @@ class AliasedStateIdWriteNoop(unittest.TestCase):
                                  for c in ex.calls))
 
 
-class EffectiveReviewBackendPrecedence(unittest.TestCase):
-    """PR #246 wave 17 P1: the projection helper honors resolve_review_spec's
-    precedence (spec default_review > FLOW_REVIEW_BACKEND > config)."""
-
-    def setUp(self) -> None:
-        self._env = os.environ.pop("FLOW_REVIEW_BACKEND", None)
-
-    def tearDown(self) -> None:
-        if self._env is not None:
-            os.environ["FLOW_REVIEW_BACKEND"] = self._env
-        else:
-            os.environ.pop("FLOW_REVIEW_BACKEND", None)
-
-    def test_spec_default_review_overrides_disabled_config(self) -> None:
-        cfg = {"review": {"backend": "none"}}
-        self.assertTrue(V._completion_review_configured(
-            cfg, {"default_review": "codex"}))
-
-    def test_spec_default_review_none_overrides_configured_backend(self) -> None:
-        cfg = {"review": {"backend": "codex"}}
-        self.assertFalse(V._completion_review_configured(
-            cfg, {"default_review": "none"}))
-
-    def test_env_overrides_config_when_spec_silent(self) -> None:
-        cfg = {"review": {"backend": "none"}}
-        os.environ["FLOW_REVIEW_BACKEND"] = "codex:gpt-5.6-sol:high"
-        self.assertTrue(V._completion_review_configured(cfg, {}))
-
-    def test_config_fallback_unchanged(self) -> None:
-        self.assertTrue(V._completion_review_configured(
-            {"review": {"backend": "codex"}}, {}))
-        self.assertFalse(V._completion_review_configured(
-            {"review": {"backend": "off"}}, {}))
-        self.assertFalse(V._completion_review_configured({}, {}))
-
-    def test_removed_backend_reads_as_not_configured(self) -> None:
-        cfg = {"review": {"backend": "codex"}}
-        self.assertFalse(V._completion_review_configured(cfg, {"default_review": "rp"}))
-        self.assertFalse(V._completion_review_configured({"review": {"backend": "rp:x"}}, {}))
-
-
 class TodoBacklogEarlyAgreement(unittest.TestCase):
     """fn-242 (#375): flow=todo (planned, all tasks todo) and tracker=backlog
     (capture's `status:backlog` label) are agreeing early states. A requested

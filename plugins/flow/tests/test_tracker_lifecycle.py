@@ -1318,3 +1318,35 @@ class Round6LockedCollisionScan(unittest.TestCase):
             self.assertEqual(doc["tracker"]["id"], GH_NODE)
             self.assertEqual(doc["tracker"]["identifier"], "#42")
             self.assertEqual(doc["tracker"]["url"], "https://github.com/o/r/issues/42")
+
+            body_crlf = "# Heading\r\n\r\nBody with `code`,   trailing spaces  \r\nand unicode: ümlaut.\r\n"
+            original_crlf = (
+                "---\r\n"
+                "id: fn-2-crlf\r\n"
+                "title: CRLF Spec\r\n"
+                "repos:\r\n"
+                "  - api\r\n"
+                "custom_owner: team-core\r\n"
+                "---\r\n"
+                + body_crlf
+            )
+            path_crlf = flow / "specs" / "fn-2-crlf.md"
+            path_crlf.write_bytes(original_crlf.encode("utf-8"))
+            ex_crlf = fake_execute({"lifecycle-create": ok({
+                "id": 2, "node_id": "I_kwDOTestNode2", "number": 43,
+                "html_url": "https://github.com/o/r/issues/43",
+            })})
+            out_crlf = L.create(flow, "fn-2-crlf", title="CRLF Spec", body=body_crlf, execute=ex_crlf)
+            self.assertNotIsInstance(out_crlf, TrackerError, out_crlf)
+            raw_bytes = path_crlf.read_bytes()
+            self.assertNotIn(b"\n", raw_bytes.replace(b"\r\n", b""))
+            after_crlf = raw_bytes.decode("utf-8")
+            _fm2, eol2, after_crlf_body = SS.split_frontmatter(after_crlf)
+            self.assertEqual(eol2, "\r\n")
+            self.assertEqual(after_crlf_body, body_crlf)
+            self.assertTrue(raw_bytes.endswith(body_crlf.encode("utf-8")))
+            doc2, _ = SS.load_spec_doc(path_crlf)
+            self.assertEqual(doc2["repos"], ["api"])
+            self.assertEqual(doc2["custom_owner"], "team-core")
+            self.assertEqual(doc2["tracker"]["id"], "I_kwDOTestNode2")
+            self.assertEqual(doc2["tracker"]["identifier"], "#43")

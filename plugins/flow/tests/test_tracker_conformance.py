@@ -243,7 +243,7 @@ PROVIDERS = [
 WIRE_VERBS = (
     "read", "update", "comment-add", "comment-list", "comment-update",
     "comment-delete", "label", "assign", "list-open", "relation-list",
-    "question", "attach", "attach-get", "list-states", "unready",
+    "question", "attach", "attach-get", "list-states", "unready", "link-pr",
 )
 
 
@@ -751,6 +751,38 @@ class ConformanceMatrix(unittest.TestCase):
             with self.subTest(provider=provider):
                 self._matrix_case(provider, cfg, locator, responses,
                                   verb="unready", kwargs={})
+
+    def test_link_pr_all_four(self) -> None:
+        pr_url = "https://github.com/o/r/pull/99"
+        cases = [
+            ("github", gh_cfg(), loc(GH_NODE, "#42"),
+             {"wire-pr-link-parent-read": ok(GH_ISSUE)}),
+            ("gitlab", gl_cfg(), loc(str(GL_ID), "g/p#12"),
+             {"wire-pr-link-parent-read": ok(GL_ISSUE),
+              "wire-comment-list": ok([]),
+              "wire-parent-read": ok(GL_ISSUE),
+              "wire-comment-add": ok({
+                  "id": 1, "body": f"Flow-Next PR: {pr_url}",
+                  "noteable_id": GL_ID})}),
+            ("linear", ln_cfg(), loc(LN_UUID, "WOR-17"),
+             {"wire-pr-link-parent-read": gql_issue(LN_ISSUE),
+              "wire-pr-link-list": ok({"data": {"issue": {
+                  "attachments": {
+                      "nodes": [],
+                      "pageInfo": {"hasNextPage": False, "endCursor": None},
+                  }}}}),
+              "wire-pr-link": ok({"data": {"attachmentLinkURL": {
+                  "success": True,
+                  "attachment": {"id": "att-pr-1", "url": pr_url},
+              }}})}),
+            ("jira", jr_cfg(), loc(JR_ID, "SCRUM-1"),
+             {"wire-pr-link-parent-read": ok(JR_ISSUE),
+              "wire-pr-link": ok({"id": 101})}),
+        ]
+        for provider, cfg, locator, responses in cases:
+            with self.subTest(provider=provider):
+                self._matrix_case(provider, cfg, locator, responses,
+                                  verb="link-pr", kwargs={"url": pr_url})
 
     def test_matrix_covers_every_wire_verb(self) -> None:
         self.assertEqual(tuple(WIRE_VERBS), W.WIRE_VERBS)
