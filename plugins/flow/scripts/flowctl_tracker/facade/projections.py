@@ -6,10 +6,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from ..config_lock import ConfigLockTimeout, config_lock
-from ..lifecycle.helpers import (Execute, Result, atomic_write_json, dict_,
-                                spec_sidecar_lock,
-                                 load_spec, merged_tracker, now_iso)
+from ..lifecycle.helpers import Execute, Result, dict_
 from ..types import ErrorClass, TrackerError
 from ..wire import (_PAGE_SIZE, _destination, _gh_repo, _gl_project, _jira,
                     _jira_base, _rest_drain, github, gitlab, linear)
@@ -194,87 +191,3 @@ def _config_exists(provider: str, config: dict, ready_state: str,
         return _norm(ready_state) in names
 
     return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
-
-
-def _persist_ready(flow_dir: Path, spec_id: str, *, desired: bool,
-                   expected_id: str | None, expected_identifier: str | None
-                   ) -> Result:
-    try:
-        with config_lock(flow_dir), spec_sidecar_lock(flow_dir, spec_id):
-            loaded = load_spec(flow_dir, spec_id)
-            if isinstance(loaded, TrackerError):
-                return loaded
-            path, spec = loaded
-            tracker = merged_tracker(spec)
-            if (tracker.get("id") != expected_id
-                    or tracker.get("identifier") != expected_identifier):
-                return TrackerError(
-                    ErrorClass.CONFLICT,
-                    "tracker identity changed during readiness projection",
-                    subtype="identity_drift",
-                    details={
-                        "expected": {
-                            "id": expected_id,
-                            "identifier": expected_identifier,
-                        },
-                        "found": {
-                            "id": tracker.get("id"),
-                            "identifier": tracker.get("identifier"),
-                        },
-                    },
-                )
-            changed = bool(spec.get("ready", False)) != desired
-            if changed:
-                spec = dict(spec)
-                spec["ready"] = desired
-                spec["updated_at"] = now_iso()
-                err = atomic_write_json(path, spec)
-                if err:
-                    return err
-            return {"kind": "updated" if changed else "noop",
-                    "ready": desired, "changed": changed}
-    except ConfigLockTimeout as exc:
-        return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
-
-
-def project_readiness(flow_dir: Path, spec_id: str, *, issue: dict,
-                      config: dict, provider: str, locator: dict,
-                      execute: Execute) -> dict:
-    """Project readyState without aborting body/status/comment reconciliation."""
-    ready_state = _ready_state(config)
-    if ready_state is None:
-        return {"kind": "skipped", "reason": "readyState_unset"}
-
-    desired = _desired(provider, issue, ready_state)
-    if isinstance(desired, TrackerError):
-        return {"kind": "noop", "reason": "unreadable_issue",
-                "degraded": _error_data(desired)}
-
-    if not desired:
-        exists = _config_exists(provider, config, ready_state, execute)
-        if isinstance(exists, TrackerError):
-            return {"kind": "noop", "reason": "readiness_probe_failed",
-                    "degraded": _error_data(exists)}
-        if not exists:
-            return {
-                "kind": "noop",
-                "reason": "stale_readyState",
-                "readyState": ready_state,
-                "degraded": {
-                    "kind": "stale_readyState",
-                    "message": (
-                        f"configured readyState {ready_state!r} was not found; "
-                        "local ready flag untouched"
-                    ),
-                },
-            }
-
-    out = _persist_ready(
-        flow_dir, spec_id, desired=bool(desired),
-        expected_id=locator.get("durable"),
-        expected_identifier=locator.get("display"),
-    )
-    if isinstance(out, TrackerError):
-        return {"kind": "noop", "reason": "readiness_write_failed",
-                "degraded": _error_data(out)}
-    return {**out, "readyState": ready_state}

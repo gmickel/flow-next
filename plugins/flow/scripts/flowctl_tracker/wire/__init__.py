@@ -722,9 +722,7 @@ _EXCERPT_CHARS = 500
 def _list_open(provider: str, mod: Any, config: dict, execute: Execute, *,
                any_lane: bool, unlinked: bool,
                flow_dir: Optional[Path]) -> Result:
-    """Either flag returns compact rows; without one, today's output."""
-    if not (any_lane or unlinked):
-        return mod.list_open(config, execute)
+    """Always return compact rows (never raw API output)."""
     if unlinked and flow_dir is None:
         return TrackerError(ErrorClass.INVALID_INPUT,
                             "list-open --unlinked requires the .flow directory",
@@ -832,7 +830,11 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
 
     mod = _PROVIDERS[provider]
     if verb == "read":
-        return mod.read(config, parsed, execute)  # type: ignore[arg-type]
+        out = mod.read(config, parsed, execute)  # type: ignore[arg-type]
+        if isinstance(out, dict):
+            from ..spec_store import body_snapshot_hash  # noqa: PLC0415
+            out = {**out, "snapshot": body_snapshot_hash(out.get("body"))}
+        return out
     if verb == "update":
         return mod.update(config, parsed, execute, title=title, body=body, parent=_parent)  # type: ignore[arg-type]
     if verb == "comment-add":

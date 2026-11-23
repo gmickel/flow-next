@@ -23,11 +23,11 @@ CREATE_FIRST_KEY_RE = re.compile(r"[0-9a-f]{16}")
 #: Spec ids are lowercase slug tokens (fn-12, fn-12-add-auth, wor-17-slug).
 #: The shape gate is the FIRST containment defence: "../../victim" reproduced
 #: an arbitrary-file overwrite before this existed.
-SPEC_ID_RE = re.compile(r"^[a-z][a-z0-9]*-[0-9]+(?:-[a-z0-9][a-z0-9-]*)?$")
+SPEC_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def validate_spec_id(spec_id) -> Optional[TrackerError]:
-    if not isinstance(spec_id, str) or not SPEC_ID_RE.fullmatch(spec_id):
+    if not isinstance(spec_id, str) or ".." in spec_id or not SPEC_ID_RE.fullmatch(spec_id):
         return TrackerError(ErrorClass.INVALID_INPUT,
                             f"invalid spec id {spec_id!r}",
                             subtype="spec_id")
@@ -234,10 +234,12 @@ def spec_parent_field(tracker_block: Any) -> Result:
 
 
 def spec_path(flow_dir: Path, spec_id: str) -> Path:
-    return Path(flow_dir) / "specs" / f"{spec_id}.json"
+    from ..spec_store import spec_path as _spec_path  # noqa: PLC0415
+    return _spec_path(flow_dir, spec_id)
 
 
 def load_spec(flow_dir: Path, spec_id: str) -> Union[tuple[Path, dict], TrackerError]:
+    from ..spec_store import load_spec_doc  # noqa: PLC0415
     bad = validate_spec_id(spec_id)
     if bad:
         return bad
@@ -248,29 +250,16 @@ def load_spec(flow_dir: Path, spec_id: str) -> Union[tuple[Path, dict], TrackerE
     if not path.is_file():
         return TrackerError(ErrorClass.NOT_FOUND, f"spec {spec_id!r} not found",
                             subtype="spec")
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        return TrackerError(ErrorClass.TRANSPORT, f"unreadable spec: {exc}",
-                            subtype="spec")
-    if not isinstance(data, dict):
-        return TrackerError(ErrorClass.INVALID_INPUT, "spec json is not an object",
-                            subtype="spec")
+    loaded = load_spec_doc(path, spec_id=spec_id)
+    if isinstance(loaded, TrackerError):
+        return loaded
+    data, _body = loaded
     return path, data
 
 
 def iter_tracker_states(flow_dir: Path):
-    specs = Path(flow_dir) / "specs"
-    if not specs.is_dir():
-        return
-    for path in sorted(specs.glob("*.json")):
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if not isinstance(data, dict):
-            continue
-        yield data.get("id", path.stem), dict_(data.get("tracker"))
+    from ..spec_store import iter_spec_trackers  # noqa: PLC0415
+    yield from iter_spec_trackers(flow_dir)
 
 
 def collision(flow_dir: Path, durable_id: str, *, except_spec: Optional[str] = None
@@ -288,56 +277,17 @@ def collision(flow_dir: Path, durable_id: str, *, except_spec: Optional[str] = N
     return None
 
 
-SPEC_SIDECAR_LOCK_WAIT_SECS = 30.0
-
-
-def spec_sidecar_lock_path(flow_dir: Path, spec_id: str) -> Path:
-    """Must equal flowctl's `_review_sidecar_lock_path` (pinned by a parity test)."""
-    import hashlib  # noqa: PLC0415
-
-    digest = hashlib.sha256(spec_id.encode("utf-8")).hexdigest()
-    return Path(flow_dir) / "locks" / f"review-rounds-{digest}.lock"
-
-
-@contextmanager
-def spec_sidecar_lock(flow_dir: Path, spec_id: str):
-    """Same kernel lock and filename as the review ledger; config lock first."""
-    from ..subjects import _bounded_file_lock  # noqa: PLC0415
-
-    with _bounded_file_lock(
-        spec_sidecar_lock_path(flow_dir, spec_id),
-        timeout_s=SPEC_SIDECAR_LOCK_WAIT_SECS, label="spec sidecar",
-    ):
-        yield
-
-
 def write_tracker_block(path: Path, spec_data: dict, tracker: dict
                         ) -> Optional[TrackerError]:
-    spec_data = dict(spec_data)
-    spec_data["tracker"] = tracker
-    spec_data["updated_at"] = now_iso()
-    return atomic_write_json(path, spec_data)
+    from ..spec_store import write_spec_tracker  # noqa: PLC0415
+    return write_spec_tracker(path, tracker, spec_id=spec_data.get("id"))
 
 
 def locked_tracker_write(flow_dir: Path, spec_id: str, mutate, *,
                          collision_id: Optional[str] = None) -> Result:
-    """Reload + mutate + persist the tracker block, SERIALIZED under the
-    shared .flow writer lock (same pattern as relate._ledger_write and
-    status._persist_applied_state). The spec snapshot loaded before the
-    provider request must never be written back wholesale - that silently
-    erases a concurrent update to the same spec. `mutate` receives the
-    RELOADED merged tracker block and returns the block to persist; it must
-    touch only tracker-owned fields. `mutate` may instead return a
-    TrackerError to abort - nothing is persisted and the error propagates.
-    When `collision_id` is given, the durable-collision scan runs INSIDE this
-    critical section, atomically with the write: an unlocked pre-scan is a
-    check-then-lock race (two specs persisting the same durable id can both
-    pass the scan, then both serialized writes succeed, violating the
-    one-spec-per-durable-id invariant). Returns the persisted tracker block,
-    or a TrackerError - never raises."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
-        with config_lock(flow_dir), spec_sidecar_lock(flow_dir, spec_id):
+        with config_lock(flow_dir):
             reloaded = load_spec(flow_dir, spec_id)
             if isinstance(reloaded, TrackerError):
                 return reloaded
@@ -365,27 +315,4 @@ def write_sync_receipt(flow_dir: Path, *, spec_id: str, status: str,
                        note: Optional[str] = None,
                        degraded: Optional[dict] = None,
                        details: Optional[dict] = None) -> Optional[TrackerError]:
-    receipt = {
-        "type": "sync",
-        "id": spec_id,
-        "tracker_id": tracker_id,
-        "status": status,
-        "event": event,
-        "transport": transport,
-        "merges": [],
-        "note": note,
-        # Degradation is STRUCTURED, never a sentence in `note` (epic contract).
-        "degraded": degraded,
-        "timestamp": now_iso(),
-    }
-    if details is not None:
-        # Partial-failure evidence is STRUCTURED too: the error's details
-        # (completed_steps, created identity) verbatim, never prose in `note`.
-        receipt["details"] = details
-    runs = Path(flow_dir) / "sync-runs"
-    ts_slug = receipt["timestamp"].replace(":", "").replace("-", "").replace(".", "")
-    # Typed subject tokens (fn-135: "chart:fn-10") carry a colon, which is
-    # illegal in NTFS filenames (WinError 123). Sanitize the filename only;
-    # the receipt body keeps the exact subject id.
-    fname_id = str(spec_id).replace(":", "-")
-    return atomic_write_json(runs / f"sync-{fname_id}-{ts_slug}.json", receipt)
+    return None

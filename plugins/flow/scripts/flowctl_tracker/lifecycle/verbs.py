@@ -112,11 +112,10 @@ def _create_transaction(flow_dir, spec_id: str, *, title: str, body: str,
                         event: Optional[str] = None,
                         execute: Execute = default_execute,
                         write_receipt: bool = True,
-                        parent: Optional[str] = None) -> Result:
-    """Create, link, fresh-read, seed the paired base, then write one receipt.
-
-    `parent` (the `--parent` option) is recorded on the spec with the link;
-    without it the spec's own `tracker.parent` is used."""
+                        parent: Optional[str] = None,
+                        project_id: Optional[str] = None,
+                        project_milestone_id: Optional[str] = None) -> Result:
+    """Create and link a tracker issue for an unlinked spec."""
     flow_dir = Path(flow_dir)
     config = read_config(flow_dir)
     provider = tracker_type(config)
@@ -134,15 +133,15 @@ def _create_transaction(flow_dir, spec_id: str, *, title: str, body: str,
             f"(linkState={derive_link_state(tracker)!r}); refuse bare create",
             subtype="already_linked",
         )
-    # Read the sidecar project ids BEFORE the claim: a malformed field must
-    # fail without reserving the spec or issuing a remote mutation.
-    project = spec_project_fields(tracker)
+    project_raw: dict = {}
+    if project_id is not None:
+        project_raw["projectId"] = project_id
+    if project_milestone_id is not None:
+        project_raw["projectMilestoneId"] = project_milestone_id
+    project = spec_project_fields(project_raw)
     if isinstance(project, TrackerError):
         return project
-    if parent is None:
-        parent = spec_parent_field(tracker)
-    else:
-        parent = parent_value(parent, source="--parent")
+    parent = parent_value(parent, source="--parent")
     if isinstance(parent, TrackerError):
         return parent
     unsupported = (project_capability_error(provider, project)
@@ -166,8 +165,6 @@ def _create_transaction(flow_dir, spec_id: str, *, title: str, body: str,
         "url": created.get("url"),
         "linkState": "linked",
     }
-    if parent is not None:
-        link_fields["parent"] = parent
 
     def _link(t: dict):
         # An identity that appeared concurrently (e.g. persist-external, which
@@ -215,77 +212,8 @@ def _create_transaction(flow_dir, spec_id: str, *, title: str, body: str,
         _release_claim(rec_path)
         return failed
 
-    # A durable link is not a completed create lifecycle until both base forms
-    # reflect one real sync point. Import locally to avoid the intentional
-    # lifecycle.verbs <-> syncbody module dependency at import time.
-    from ..syncbody import sync_body  # noqa: PLC0415
-    seed_flow_body = (
-        created.get("seedFlowBody")
-        if "seedFlowBody" in created
-        else (body if flow_body is None else flow_body)
-    )
-    seeded = sync_body(
-        flow_dir, spec_id,
-        flow_file_body=seed_flow_body,
-        expected_tracker_body=created.get("bodyWritten"),
-        direction="pull", event=event, execute=execute, write_receipt=False,
-    )
-    if isinstance(seeded, TrackerError):
-        import dataclasses  # noqa: PLC0415
-        details = {
-            **(seeded.details or {}),
-            "completed_steps": ["create", "link"],
-            "id": created["id"],
-            "identifier": created["identifier"],
-            "url": created.get("url"),
-        }
-        if created.get("degraded") is not None:
-            details["degraded"] = created["degraded"]
-        failed = dataclasses.replace(seeded, details=details)
-        if write_receipt:
-            rerr = write_sync_receipt(
-                flow_dir, spec_id=spec_id, status="errored",
-                tracker_id=created["id"], event=event, transport=provider,
-                note="create linked; paired-base seed failed",
-                degraded=created.get("degraded"),
-                details=details,
-            )
-            if rerr is not None:
-                details["receipt_status"] = "unwritten"
-                details["receipt_write_failed"] = {
-                    "class": rerr.cls.value,
-                    "subtype": rerr.subtype,
-                    "message": rerr.message,
-                }
-                failed = dataclasses.replace(failed, details=details)
-        _release_claim(rec_path)
-        return failed
-
-    if write_receipt:
-        err = write_sync_receipt(
-            flow_dir, spec_id=spec_id, status="pushed",
-            tracker_id=created["id"], event=event, transport=provider,
-            degraded=created.get("degraded"),
-        )
-        if err:
-            # The issue exists and the link IS persisted - a bare failure here
-            # would read as "nothing happened" and invite a duplicating retry.
-            # TrackerError is frozen: rebuild with the completed-steps detail.
-            import dataclasses  # noqa: PLC0415
-            details = {
-                **(err.details or {}),
-                "completed_steps": ["create", "link", "paired-base"],
-                "id": created["id"],
-                "identifier": created["identifier"],
-            }
-            if created.get("degraded") is not None:
-                details["degraded"] = created["degraded"]
-            failed = dataclasses.replace(err, details=details)
-            _release_claim(rec_path)
-            return failed
     result = {"id": created["id"], "identifier": created["identifier"],
-              "url": created.get("url"), "linkState": "linked",
-              "paired_base": seeded}
+              "url": created.get("url"), "linkState": "linked"}
     if parent is not None:
         result["parent"] = created["parent"]
     if created.get("degraded") is not None:
@@ -299,7 +227,9 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
            event: Optional[str] = None,
            execute: Execute = default_execute,
            write_receipt: bool = True,
-           parent: Optional[str] = None) -> Result:
+           parent: Optional[str] = None,
+           project_id: Optional[str] = None,
+           project_milestone_id: Optional[str] = None) -> Result:
     """Create transaction with exception-safe release of its spec claim."""
     flow_dir = Path(flow_dir)
     rec_path = flow_dir / "create-first" / f"spec-{spec_id}.json"
@@ -308,7 +238,8 @@ def create(flow_dir, spec_id: str, *, title: str, body: str,
         result = _create_transaction(
             flow_dir, spec_id, title=title, body=body, flow_body=flow_body,
             event=event, execute=execute, write_receipt=write_receipt,
-            parent=parent)
+            parent=parent, project_id=project_id,
+            project_milestone_id=project_milestone_id)
         completed = True
         return result
     finally:
@@ -515,7 +446,9 @@ def _release_claim(rec_path: Path) -> None:
 def _create_first_transaction(flow_dir, *, title: str, body: str,
                               retry_key: str,
                               execute: Execute = default_execute,
-                              parent: Optional[str] = None) -> Result:
+                              parent: Optional[str] = None,
+                              project_id: Optional[str] = None,
+                              project_milestone_id: Optional[str] = None) -> Result:
     """NO spec, NO receipt. Recovery record is the retry-dedupe guarantee."""
     flow_dir = Path(flow_dir)
     if not CREATE_FIRST_KEY_RE.fullmatch(retry_key or ""):
@@ -526,10 +459,19 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
+    project_raw: dict = {}
+    if project_id is not None:
+        project_raw["projectId"] = project_id
+    if project_milestone_id is not None:
+        project_raw["projectMilestoneId"] = project_milestone_id
+    project = spec_project_fields(project_raw)
+    if isinstance(project, TrackerError):
+        return project
     parent = parent_value(parent, source="--parent")
     if isinstance(parent, TrackerError):
         return parent
-    unsupported = parent_capability_error(config, parent)
+    unsupported = (project_capability_error(provider, project)
+                   or parent_capability_error(config, parent))
     if unsupported is not None:
         return unsupported
     rec_path = flow_dir / "create-first" / f"{retry_key}.json"
@@ -618,7 +560,7 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
     from ..resolve_verb import bound_executor  # noqa: PLC0415
     ex = bound_executor(config, execute)
     created = provider_create(config, ex, title=title, body=body,
-                              parent=parent)
+                              project=project or None, parent=parent)
     if isinstance(created, TrackerError):
         _release_claim(rec_path)
         return created
@@ -670,7 +612,9 @@ def _create_first_transaction(flow_dir, *, title: str, body: str,
 
 def create_first(flow_dir, *, title: str, body: str, retry_key: str,
                  execute: Execute = default_execute,
-                 parent: Optional[str] = None) -> Result:
+                 parent: Optional[str] = None,
+                 project_id: Optional[str] = None,
+                 project_milestone_id: Optional[str] = None) -> Result:
     """Create-first with cleanup only when an exception aborts finalization."""
     flow_dir = Path(flow_dir)
     rec_path = flow_dir / "create-first" / f"{retry_key}.json"
@@ -678,7 +622,8 @@ def create_first(flow_dir, *, title: str, body: str, retry_key: str,
     try:
         result = _create_first_transaction(
             flow_dir, title=title, body=body, retry_key=retry_key,
-            execute=execute, parent=parent)
+            execute=execute, parent=parent, project_id=project_id,
+            project_milestone_id=project_milestone_id)
         completed = True
         return result
     finally:

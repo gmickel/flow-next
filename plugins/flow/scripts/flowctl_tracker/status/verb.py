@@ -20,7 +20,7 @@ from ..executor import execute as default_execute
 from ..lifecycle.helpers import (Execute, Result, atomic_write_json, dict_,
                                  leaf_is_safe, load_spec, merged_tracker,
                                  now_iso, read_config, tracker_type,
-                                 write_sync_receipt, write_tracker_block, spec_sidecar_lock)
+                                 write_sync_receipt)
 from ..lifecycle.linkstate import require_durable
 from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
                                _release_claim)
@@ -75,56 +75,20 @@ def _card_in_ready_state(provider: str, config: dict, parent: dict) -> bool:
                     ready_state) is True
 
 
-def _state_dir(flow_dir: Path) -> Path:
-    """Mirror flowctl's get_state_dir: FLOW_STATE_DIR env, then the git
-    common-dir (shared across worktrees), then .flow/state for non-git."""
-    env = os.environ.get("FLOW_STATE_DIR")
-    if env:
-        return Path(env).resolve()
+def _current_git_branch(repo_root: Path) -> Optional[str]:
+    """Return the active non-default git branch name, or None."""
     try:
-        # --path-format modifies only the options AFTER it (PR #246 wave-14
-        # P1): trailing placement returned a cwd-relative ".git", which broke
-        # as soon as the caller's cwd differed from flow_dir.parent.
-        result = subprocess.run(  # noqa: S603 - fixed argv, shell=False
-            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             capture_output=True, text=True, encoding="utf-8", check=True,
-            cwd=flow_dir.parent,
+            cwd=repo_root,
         )
-        return Path(result.stdout.strip()) / "flow-state"
     except (subprocess.CalledProcessError, OSError):
-        return flow_dir / "state"
-
-
-def _load_tasks(flow_dir: Path, spec_id: str) -> list:
-    """Task definitions overlaid with runtime state. Since the fn-111 storage
-    split, .flow/tasks/<id>.json is the DEFINITION (status is the scaffold
-    value); the live status (claimed/in_progress/done) lives in the runtime
-    store at <state-dir>/tasks/<id>.state.json. Reading only the definition
-    made every started spec normalize as todo (measured live 2026-07-28)."""
-    tasks_dir = flow_dir / "tasks"
-    if not tasks_dir.is_dir():
-        return []
-    runtime_dir = _state_dir(flow_dir) / "tasks"
-    out = []
-    for path in sorted(tasks_dir.glob(f"{spec_id}.*.json")):
-        if path.name.endswith(".state.json"):
-            continue
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if not isinstance(data, dict):
-            continue
-        status = data.get("status") or "todo"
-        state_path = runtime_dir / f"{path.name[:-len('.json')]}.state.json"
-        try:
-            runtime = json.loads(state_path.read_text(encoding="utf-8"))
-            if isinstance(runtime, dict) and runtime.get("status"):
-                status = runtime["status"]
-        except (OSError, ValueError):
-            pass
-        out.append({"id": data.get("id"), "status": status})
-    return out
+        return None
+    name = result.stdout.strip()
+    if not name or name in ("HEAD", "main", "master"):
+        return None
+    return name
 
 
 def _locator(tracker: dict) -> Result:
@@ -161,7 +125,7 @@ def _persist_applied_state(flow_dir: Path, spec_id: str, *,
     TrackerError - never raises."""
     from ..config_lock import ConfigLockTimeout, config_lock  # noqa: PLC0415
     try:
-        with config_lock(flow_dir), spec_sidecar_lock(flow_dir, spec_id):
+        with config_lock(flow_dir):
             reloaded = load_spec(flow_dir, spec_id)
             if isinstance(reloaded, TrackerError):
                 return reloaded
@@ -186,13 +150,6 @@ def _persist_applied_state(flow_dir: Path, spec_id: str, *,
                                       "identifier": got_display},
                         },
                     )
-            if fold_local_done:
-                spec = dict(spec)
-                spec["status"] = "done"
-            tracker["lastSyncedAt"] = now_iso()
-            werr = write_tracker_block(path, spec, tracker)
-            if werr:
-                return werr
             return tracker
     except ConfigLockTimeout as exc:
         return TrackerError(ErrorClass.CONFLICT, str(exc), subtype="lock_timeout")
@@ -258,6 +215,7 @@ def _claim_status(flow_dir: Path, spec_id: str, rec_path: Path,
 
 def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
            event: Optional[str] = None,
+           branch: Optional[str] = None,
            execute: Execute = default_execute,
            write_receipt: bool = True,
            _parent: Optional[dict] = None,
@@ -295,7 +253,7 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
         return _status_txn(
             flow_dir, spec_id, config=config, provider=provider,
             conflict_tiebreak=conflict_tiebreak,
-            to=to, reason=reason, event=event, execute=execute,
+            to=to, reason=reason, event=event, branch=branch, execute=execute,
             write_receipt=write_receipt, parent_snapshot=_parent,
             pr_evidence=_pr_evidence)
     finally:
@@ -305,6 +263,7 @@ def status(flow_dir, spec_id: str, *, to: str, reason: Optional[str] = None,
 def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
                 conflict_tiebreak: str,
                 to: str, reason: Optional[str], event: Optional[str],
+                branch: Optional[str],
                 execute: Execute, write_receipt: bool,
                 parent_snapshot: Optional[dict] = None,
                 pr_evidence: Optional[str] = None) -> Result:
@@ -352,14 +311,12 @@ def _status_txn(flow_dir: Path, spec_id: str, *, config: dict, provider: str,
     # PR evidence belongs to the source Git checkout, not the configured
     # tracker transport. In particular, Jira DC sslVerify=false is valid for
     # Jira HTTP but cannot be applied to the independent gh CLI route.
+    resolved_branch = (branch if branch is not None
+                       else spec_data.get("branch_name") or _current_git_branch(flow_dir.parent))
+    effective_spec = {**spec_data, "branch_name": resolved_branch}
     if pr_evidence is None:
-        pr_evidence = merge_evidence(config, spec_data, execute)
-    tasks = _load_tasks(flow_dir, spec_id)
-    flow_norm = flow_to_normalized(
-        spec_data, pr_evidence,
-        _completion_review_configured(config, spec_data),
-        tasks=tasks,
-    )
+        pr_evidence = merge_evidence(config, effective_spec, execute, branch=resolved_branch)
+    flow_norm = flow_to_normalized(effective_spec, pr_evidence)
 
     tracker_norm = tracker_norm_from_parent(provider, parent, dest)
     repair_retry = False

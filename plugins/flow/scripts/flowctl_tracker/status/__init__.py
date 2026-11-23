@@ -33,6 +33,7 @@ __all__ = [
 
 def run(flow_dir, *, spec_id: Optional[str] = None, to: Optional[str] = None,
         reason: Optional[str] = None, event: Optional[str] = None,
+        branch: Optional[str] = None,
         execute: Execute = default_execute) -> tuple[str, int]:
     """Thin envelope shell — never raises across the boundary."""
     config = read_config(flow_dir)
@@ -52,7 +53,7 @@ def run(flow_dir, *, spec_id: Optional[str] = None, to: Optional[str] = None,
 
     try:
         out = status(flow_dir, spec_id, to=to, reason=reason, event=event,
-                     execute=execute)
+                     branch=branch, execute=execute)
     except Exception as exc:  # noqa: BLE001 - boundary must never raise
         return envelope.failure(TrackerError(
             ErrorClass.TRANSPORT, f"status verb raised: {exc}",

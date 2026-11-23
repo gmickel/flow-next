@@ -1,0 +1,32 @@
+#!/bin/bash
+# edge launcher — runs edge.py beside this script via a probed Python 3.11+ interpreter.
+# Probe order: $PYTHON_BIN -> py -3 -> python3 -> python.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+FLOW_PY=()
+FLOW_PY_TOO_OLD=()
+for _cand in "${PYTHON_BIN:-}" "py -3" "python3" "python"; do
+  [ -n "$_cand" ] || continue
+  read -r -a _argv <<< "$_cand"
+  [ "${#_argv[@]}" -gt 0 ] || continue
+  if "${_argv[@]}" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >/dev/null 2>&1; then
+    FLOW_PY=("${_argv[@]}")
+    break
+  elif [ "$?" -eq 3 ]; then
+    FLOW_PY_TOO_OLD+=("$_cand")
+  fi
+done
+
+if [ "${#FLOW_PY[@]}" -eq 0 ]; then
+  if [ "${#FLOW_PY_TOO_OLD[@]}" -gt 0 ]; then
+    echo "edge: Python 3.11 or newer is required; working but too-old candidate(s): ${FLOW_PY_TOO_OLD[*]}." >&2
+    echo "  Install a supported Python, or set PYTHON_BIN to its command name." >&2
+  else
+    echo "edge: no working Python interpreter found (tried \$PYTHON_BIN, py -3, python3, python)." >&2
+    echo "  On Windows, 'python3' may be the disabled Microsoft Store alias stub;" >&2
+    echo "  install python.org Python (or the py launcher), or set PYTHON_BIN to a working interpreter." >&2
+  fi
+  exit 1
+fi
+
+exec "${FLOW_PY[@]}" "$SCRIPT_DIR/edge.py" "$@"

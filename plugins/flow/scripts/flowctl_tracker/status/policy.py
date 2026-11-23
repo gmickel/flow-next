@@ -126,7 +126,8 @@ def validate_conflict_tiebreak(config: dict) -> str | TrackerError:
 forge_merge_read: Optional[Callable[[str], Any]] = None
 
 
-def merge_evidence(config: dict, spec_data: dict, execute: Execute) -> str:
+def merge_evidence(config: dict, spec_data: dict, execute: Execute, *,
+                   branch: Optional[str] = None) -> str:
     """Probe `gh pr list --head <branch>` via the executor CLI route.
 
     Returns one of: merged|open|closed-unmerged|none|ambiguous|probe-error.
@@ -136,7 +137,7 @@ def merge_evidence(config: dict, spec_data: dict, execute: Execute) -> str:
     (#391), and a failed file probe is probe-error for the whole result.
     Another forge's merge requests read through `forge_merge_read`.
     """
-    branch = spec_data.get("branch_name")
+    branch = branch if branch is not None else spec_data.get("branch_name")
     if not isinstance(branch, str) or not branch.strip():
         return "probe-error"
     branch = branch.strip()
@@ -270,59 +271,22 @@ def _classify_pr_rows(rows: list, spec_only: frozenset = frozenset()) -> str:
 # ---------------------------------------------------------------------------
 
 def flow_to_normalized(spec_data: dict, pr_evidence: str,
-                       completion_review_configured: bool,
+                       completion_review_configured: bool = False,
                        *, tasks: Optional[list] = None) -> str:
-    """8-row table from status-sync.md, emitting CLI slots.
+    """Derive normalized status from PR merge evidence and branch presence.
 
-    Row order is load-bearing: PR signal rows (1–6) beat local task rows (7–8).
     Terminal (`done`) is reachable ONLY from pr_evidence == merged.
-    `verified` (row 2) maps to the `done` slot; ship evidence is kept for the
-    caller (completion_review_status), not as a separate slot name.
     """
     if pr_evidence not in PR_EVIDENCE:
         pr_evidence = "probe-error"
-    spec_status = str(spec_data.get("status") or "open")
-    review = str(spec_data.get("completion_review_status") or "unknown")
-    task_list = tasks if tasks is not None else list(spec_data.get("tasks") or [])
-
-    # Rows 1–3: merged
     if pr_evidence == "merged":
-        if spec_status == "done":
-            if isinstance(spec_data.get("retired"), dict):
-                # A retired spec was never built: ask for the cancelled
-                # family, which `decide` surfaces and never auto-applies.
-                return "cancelled"
-            if not completion_review_configured:
-                return "done"  # row 1
-            if review in COMPLETION_REVIEW_SATISFYING:
-                # row 2: ship (verified → done slot) or not_required
-                # (policy-excused). The verified-vs-done LABEL selector in
-                # verb.py stays ship-only; only the slot is decided here.
-                return "done"
-            return "in_review"  # row 3 (configured, not satisfied)
-        # Merged PR + still-open spec: PR signal wins over local task rows.
-        return "in_review"
-
-    # Row 4: open PR — any local status
+        return "done"
     if pr_evidence == "open":
         return "in_review"
-
-    # Rows 5–6: done + non-terminal evidence
-    if spec_status == "done":
-        # none / closed-unmerged / ambiguous / probe-error → in_review (NOT terminal)
-        return "in_review"
-
-    # Rows 7–8: open spec, no PR signal. `blocked` counts as work underway:
-    # status-sync.md says blocked tasks do not change the spec-level
-    # normalized status - "the issue stays in-progress" - so an all-blocked
-    # spec must not regress to todo (that would conflict against an
-    # already-in-progress tracker or hide that work started).
-    statuses = [_task_status(t) for t in task_list]
-    if not task_list:
-        return "backlog"  # row 8 — no tasks
-    if any(s in ("in_progress", "done", "blocked") for s in statuses):
-        return "in_progress"  # row 7
-    return "todo"  # row 8 — all todo (planned→todo)
+    branch = spec_data.get("branch_name")
+    if isinstance(branch, str) and branch.strip():
+        return "in_progress"
+    return "backlog"
 
 
 def _task_status(task: Any) -> str:

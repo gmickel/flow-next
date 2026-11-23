@@ -44,6 +44,8 @@ def run(flow_dir, verb: str, *, spec_id: Optional[str] = None,
         identifier: Optional[str] = None, durable_id: Optional[str] = None,
         url: Optional[str] = None, source: Optional[str] = None,
         parent: Optional[str] = None,
+        project_id: Optional[str] = None,
+        project_milestone_id: Optional[str] = None,
         execute: Execute = default_execute) -> tuple[str, int]:
     """Thin envelope shell — never raises across the boundary."""
     config = read_config(flow_dir)
@@ -72,7 +74,9 @@ def run(flow_dir, verb: str, *, spec_id: Optional[str] = None,
                     "create requires <spec-id> --title --body-file",
                     subtype="args"))
             out = create(flow_dir, spec_id, title=title, body=body,
-                         event=event, execute=execute, parent=parent)
+                         event=event, execute=execute, parent=parent,
+                         project_id=project_id,
+                         project_milestone_id=project_milestone_id)
         elif verb == "create-first":
             if title is None or body is None or not retry_key:
                 return envelope.failure(TrackerError(
@@ -81,7 +85,8 @@ def run(flow_dir, verb: str, *, spec_id: Optional[str] = None,
                     subtype="args"))
             out = create_first(flow_dir, title=title, body=body,
                                retry_key=retry_key, execute=execute,
-                               parent=parent)
+                               parent=parent, project_id=project_id,
+                               project_milestone_id=project_milestone_id)
         elif verb == "persist-external":
             if not spec_id or not identifier or not source:
                 return envelope.failure(TrackerError(
