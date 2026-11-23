@@ -2,7 +2,7 @@
 
 ## Dispatch
 
-Send review to another model family through `orchestrate.md`. If a named reviewer cannot be reached, stop and say so; never substitute a reviewer silently. When no preference is stated and no other family is reachable, the same family reviews and that fact goes on the PR's review line.
+Send review to another model family through `orchestrate.md`. If a named reviewer cannot be reached, stop and say so; never substitute a reviewer silently. When no preference is stated and no other family is reachable, the same family reviews and that fact goes on the PR's review line. A reviewer from the builder's own vendor, the builder's own model included, is a same-family review wherever its name appeared; never report it as another family.
 
 On the first round of a change review, use one reviewer when the change is small, stays in one area, and touches no shared state, concurrency, security, or data layout. Otherwise dispatch three reviewers in parallel, one lens each: **correctness**, **contracts**, and **integration**.
 
