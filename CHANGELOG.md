@@ -4,6 +4,12 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## Unreleased
+
+### Fixed
+
+- **Landing can finish spec selection when GitHub truncates a recursive tree.** It re-reads the complete `.flow` subtrees at the exact head and base commits, and stops for a person when a required read or ref check is incomplete. The ordinary recursive-tree fast path remains available on smaller repositories.
+
 ## [flow-next 9.20.0] - 2026-11-22
 
 Agents spend less of their context window on flow-next's own instructions and wait less on its tooling. The CLI guide an agent reads before most flowctl work shrinks from 17.8 KB to 4.2 KB, because the multi-CLI bridge and model-steering recipes now load only when an agent is about to hand work to another CLI or pick a model. The dependency view gets every spec's dependencies in one call instead of one call per open spec. The shipped skills, agents and commands are 37,641 bytes smaller (1.8%), mostly from 11 duplicate files removed. CLI help prints from its static fast path on Python 3.11 through 3.13 as well as 3.14 (28 ms median over three runs), and PR delivery and review-feedback resolution make fewer GitHub round-trips.
