@@ -1,0 +1,13 @@
+{
+  "name": "flow",
+  "description": "Flow-Next (preview): spec-driven agentic development with one router, cross-model review, and git-native state.",
+  "author": {
+    "name": "Gordon Mickel",
+    "email": "gordon@mickel.tech"
+  },
+  "homepage": "https://flow-next.dev",
+  "repository": "https://github.com/gmickel/flow-next",
+  "license": "MIT",
+  "skills": "./skills/",
+  "commands": "./commands"
+}
