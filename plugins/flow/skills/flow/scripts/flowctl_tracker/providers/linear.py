@@ -1,12 +1,14 @@
 """Linear resolution (fn-139.6).
 
-Destination pins `teamId`, `teamKey` and `labelIds` (label NAME, lowercased ->
-id); `stateIds` is its own scope (`destination.stateIds`) because status
-writes need a `stateId` and `type: started` maps to TWO states (In Progress,
-In Review) - a human decides that tiebreak once, via `--select`.
+Destination pins `teamId` and `teamKey`, and leaves `labelIds` empty because
+Linear's team label listing includes workspace-wide labels that should not be
+cached in repository config (labels are resolved live when needed). `stateIds`
+is its own scope (`destination.stateIds`) because status writes need a `stateId`
+and `type: started` maps to TWO states (In Progress, In Review) - a human
+decides that tiebreak once, via `--select`.
 
 Everything GraphQL is PAGINATED and fully drained (`pageInfo.hasNextPage`) -
-first-page-only silently loses labels/states on real workspaces.
+first-page-only silently loses states on real workspaces.
 """
 
 from __future__ import annotations
@@ -106,11 +108,6 @@ _STATES_QUERY = (
     f"states(first: {_PAGE}, after: $after) "
     "{ nodes { id name type } pageInfo { hasNextPage endCursor } } } }"
 )
-_LABELS_QUERY = (
-    "query($teamId: String!, $after: String) { team(id: $teamId) { "
-    f"labels(first: {_PAGE}, after: $after) "
-    "{ nodes { id name } pageInfo { hasNextPage endCursor } } } }"
-)
 
 
 def _team_id(config: dict) -> Optional[str]:
@@ -132,12 +129,7 @@ def resolve_destination(config: dict, execute: Callable) -> Union[dict, TrackerE
         return TrackerError(ErrorClass.UNRESOLVED,
                             f"linear team {team_id!r} did not resolve",
                             subtype="destination")
-    labels = _drain(execute, "resolve-labels", _LABELS_QUERY, team_id, "labels")
-    if isinstance(labels, TrackerError):
-        return labels
-    label_ids = {str(lbl["name"]).lower(): lbl["id"]
-                 for lbl in labels if lbl.get("name") and lbl.get("id")}
-    return {"teamId": team["id"], "teamKey": team["key"], "labelIds": label_ids}
+    return {"teamId": team["id"], "teamKey": team["key"], "labelIds": {}}
 
 
 def fetch_states(config: dict, execute: Callable) -> Union[tuple, TrackerError]:
