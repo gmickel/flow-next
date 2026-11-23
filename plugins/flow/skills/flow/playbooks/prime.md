@@ -13,7 +13,7 @@ Make one repository ready for agentic work. Prove each outcome by doing it rathe
 
 ## Order and bounds
 
-Ask first, in one batch and before any proof runs: the legacy and frozen areas, where specs go, and whether to add the Flow sentence. Read for a minute or two before asking, so the legacy question offers specific candidates with their evidence and the person confirms instead of recalling. If the checkout is behind its remote, say so in that batch and ask whether to update it.
+Ask first, in one batch and before any proof runs: the legacy and frozen areas, how specs are reviewed, and whether to add the Flow sentence. Read for a minute or two before asking, so the legacy question offers specific candidates with their evidence and the person confirms instead of recalling. If the checkout is behind its remote, say so in that batch and ask whether to update it.
 
 Leave the checkout as found: never pull, fast-forward, or switch the person's branch unasked. New files go on a new branch, uncommitted until the person says.
 
@@ -21,7 +21,7 @@ Run independent proofs at the same time, and stop a proof that has stopped makin
 
 ## Acting and leaving behind
 
-Inside one repo, fill gaps using outcome defaults and stack-fitting tools without installing unchosen tools. Ask once where specs go and how they get there, show fitting shapes, and offer to record the team's answer; prime recommends, the team decides. Keep `CLAUDE.md` / `AGENTS.md` short, write no version markers, and offer to add this exact sentence:
+Inside one repo, fill gaps using outcome defaults and stack-fitting tools without installing unchosen tools. Specs live in `.flow/specs/`. Ask once how the team reviews them (in the same PR as the code, in a spec-only PR first, or on the tracker issue), and offer to record the answer; prime recommends, the team decides. Keep `CLAUDE.md` / `AGENTS.md` short, write no version markers, and offer to add this exact sentence:
 
 `Use the Flow skill for development work in this repository.`
 
