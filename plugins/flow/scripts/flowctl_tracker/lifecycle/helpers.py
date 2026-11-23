@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from contextlib import contextmanager
 import os
 import re
 import tempfile
@@ -226,11 +225,6 @@ def parent_value(value: Any, *, source: str) -> Result:
             f"got {value!r}",
             subtype="parent")
     return value.strip()
-
-
-def spec_parent_field(tracker_block: Any) -> Result:
-    return parent_value(dict_(tracker_block).get("parent"),
-                        source="tracker.parent")
 
 
 def spec_path(flow_dir: Path, spec_id: str) -> Path:

@@ -66,11 +66,11 @@ _JIRA_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-[1-9][0-9]*$")
 WIRE_VERBS = (
     "read", "update", "comment-add", "comment-list", "comment-update",
     "comment-delete", "label", "assign", "list-open", "relation-list",
-    "question", "attach", "attach-get", "list-states", "unready",
+    "question", "attach", "attach-get", "list-states", "unready", "link-pr",
 )
 WRITE_VERBS = frozenset({
     "update", "comment-add", "comment-update", "comment-delete", "label", "assign",
-    "question", "attach", "unready",
+    "question", "attach", "unready", "link-pr",
 })
 #: Verbs that require a parent locator. attach-get, list-open, and list-states are context-free.
 LOCATOR_VERBS = frozenset(v for v in WIRE_VERBS if v not in ("list-open", "attach-get", "list-states"))
@@ -480,26 +480,6 @@ def parent_read(provider: str, config: dict, locator: dict, execute: Execute, *,
     return mod.parent_read(config, locator, execute, op=op)
 
 
-def project_set(provider: str, config: dict, locator: dict, execute: Execute, *,
-                fields: dict) -> Result:
-    """Apply the spec sidecar's Project ids to the linked issue (fn-182 R3).
-
-    Not a CLI wire verb - an internal helper on the same footing as
-    `parent_read`. Linear-only by construction: no other provider models a
-    Project this way, and refusing beats silently dropping the ids."""
-    if not fields:
-        return TrackerError(ErrorClass.INVALID_INPUT,
-                            "project_set requires at least one project field",
-                            subtype="project")
-    if provider != "linear":
-        return TrackerError(
-            ErrorClass.CAPABILITY,
-            f"spec sidecar tracker.{sorted(fields)[0]} is Linear-only; "
-            f"tracker type is {provider!r}",
-            subtype="project")
-    return linear.project_set(config, locator, execute, fields=fields)
-
-
 def validate_pr_url(url: Any) -> Optional[TrackerError]:
     """Reject malformed link content before a facade claim or provider read."""
     if not isinstance(url, str):
@@ -778,6 +758,7 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
              file_path: Optional[str] = None,
              attachment_id: Optional[str] = None,
              out_path: Optional[str] = None,
+             url: Optional[str] = None,
              any_lane: bool = False, unlinked: bool = False,
              flow_dir: Optional[Path] = None,
              execute: Execute = default_execute,
@@ -859,6 +840,8 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
         return mod.assign(config, parsed, execute, add=add, remove=remove)  # type: ignore[arg-type]
     if verb == "unready":
         return _unready(provider, mod, config, parsed, execute)  # type: ignore[arg-type]
+    if verb == "link-pr":
+        return link_pr(provider, config, parsed, execute, url=url)  # type: ignore[arg-type]
     if verb == "list-open":
         return _list_open(provider, mod, config, execute, any_lane=any_lane,
                           unlinked=unlinked, flow_dir=flow_dir)
@@ -938,7 +921,7 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
         reply_settles: bool = False,
         add: Optional[list] = None, remove: Optional[list] = None,
         file_path: Optional[str] = None, attachment_id: Optional[str] = None,
-        out_path: Optional[str] = None,
+        out_path: Optional[str] = None, url: Optional[str] = None,
         any_lane: bool = False, unlinked: bool = False,
         execute: Execute = default_execute) -> tuple[str, int]:
     """CLI entry: return (stdout payload, exit code) — the single result envelope."""
@@ -989,7 +972,7 @@ def run(flow_dir, verb: str, *, locator: Any = None, title: Optional[str] = None
                            reply_settles=reply_settles,
                            add=add, remove=remove,
                            file_path=file_path, attachment_id=attachment_id,
-                           out_path=out_path, any_lane=any_lane,
+                           out_path=out_path, url=url, any_lane=any_lane,
                            unlinked=unlinked, flow_dir=Path(flow_dir),
                            execute=ex)
         except Exception as exc:  # noqa: BLE001 - envelope boundary

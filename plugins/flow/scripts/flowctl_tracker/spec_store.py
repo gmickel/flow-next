@@ -146,7 +146,8 @@ def _render_tracker_lines(tracker: dict[str, Any]) -> list[str]:
 def load_spec_doc(path: Path, *, spec_id: Optional[str] = None
                   ) -> Union[tuple[dict, str], TrackerError]:
     try:
-        text = path.read_text(encoding="utf-8")
+        with path.open("r", encoding="utf-8", newline="") as f:
+            text = f.read()
     except (OSError, UnicodeDecodeError) as exc:
         return TrackerError(ErrorClass.TRANSPORT, f"unreadable spec: {exc}",
                             subtype="spec")
@@ -172,7 +173,8 @@ def write_spec_tracker(path: Path, tracker: dict[str, Any],
                        *, spec_id: Optional[str] = None) -> Optional[TrackerError]:
     """Update only tracker identity+snapshot keys in frontmatter, atomically."""
     try:
-        original = path.read_text(encoding="utf-8")
+        with path.open("r", encoding="utf-8", newline="") as f:
+            original = f.read()
     except (OSError, UnicodeDecodeError) as exc:
         return TrackerError(ErrorClass.TRANSPORT, f"unreadable spec: {exc}",
                             subtype="spec")
@@ -180,6 +182,7 @@ def write_spec_tracker(path: Path, tracker: dict[str, Any],
     tracker_lines = _render_tracker_lines(tracker)
 
     if yaml_text is None:
+        eol = "\r\n" if "\r\n" in original else "\n"
         out_lines = [f"id: {_quote(spec_id or path.stem)}"]
         m = _HEADING_RE.search(body)
         if m:

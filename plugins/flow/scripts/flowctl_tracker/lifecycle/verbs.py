@@ -15,7 +15,7 @@ from ..types import ErrorClass, TrackerError
 from .helpers import (CREATE_FIRST_KEY_RE, Execute, Result, atomic_write_json,
                       leaf_is_safe,
                       load_spec, merged_tracker, now_iso, parent_value,
-                      read_config, spec_parent_field, spec_project_fields,
+                      read_config, spec_project_fields,
                       tracker_type, write_sync_receipt)
 from .helpers import locked_tracker_write as _locked_tracker_write
 from .linkstate import derive_link_state, resolve_linear_uuid

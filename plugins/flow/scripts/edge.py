@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -41,9 +40,6 @@ def get_repo_root() -> Path:
 
 
 def get_flow_dir() -> Path:
-    env = os.environ.get("FLOW_DIR")
-    if env:
-        return Path(env)
     return get_repo_root() / ".flow"
 
 
@@ -101,6 +97,7 @@ def cmd_tracker_wire(args: argparse.Namespace) -> None:
         file_path=getattr(args, "file", None),
         attachment_id=getattr(args, "attachment_id", None),
         out_path=getattr(args, "out", None),
+        url=getattr(args, "url", None),
         any_lane=getattr(args, "any_lane", False),
         unlinked=getattr(args, "unlinked", False),
     )
@@ -327,6 +324,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_w = wire_sub.add_parser("attach-get", help="Download an attachment by id")
     p_w.add_argument("attachment_id"); p_w.add_argument("--out", required=True)
+    _wire_json(p_w); p_w.set_defaults(func=cmd_tracker_wire)
+
+    p_w = wire_sub.add_parser("link-pr", help="Link a PR URL to an issue")
+    _wire_locator(p_w); p_w.add_argument("--url", required=True)
     _wire_json(p_w); p_w.set_defaults(func=cmd_tracker_wire)
 
     p_cr = tracker_sub.add_parser("create", help="Create a tracker issue and link an existing spec")

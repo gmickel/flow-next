@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Optional
 
 from ..executor import execute as default_execute
-from ..lifecycle.helpers import (Execute, Result, atomic_write_json, dict_,
+from ..lifecycle.helpers import (Execute, Result, atomic_write_json,
                                  leaf_is_safe, load_spec, merged_tracker,
-                                 now_iso, read_config, tracker_type,
+                                 read_config, tracker_type,
                                  write_sync_receipt)
 from ..lifecycle.linkstate import require_durable
 from ..lifecycle.verbs import (_claim_is_stale, _ensure_create_first_ignored,
@@ -31,34 +31,6 @@ from .policy import (Decision, decide, decision_as_error, flow_to_normalized,
 from .providers import (apply_status, enrich_linear_parent, github_native_status,
                         github_status_labels_match, repair_github_status_labels,
                         tracker_norm_from_parent)
-
-
-def _backend_off(value: str) -> bool:
-    """A backend spec is backend[:model[:effort]]; only the backend part
-    decides configured-ness. The removed ``rp``/``export`` values read as no
-    reviewer, as flowctl's review-backend resolves them."""
-    return value.split(":", 1)[0].strip().lower() in ("", "none", "off", "rp", "export")
-
-
-def _completion_review_configured(config: dict,
-                                  spec_data: Optional[dict] = None) -> bool:
-    """Effective review backend with resolve_review_spec's precedence:
-    spec default_review > FLOW_REVIEW_BACKEND env > config review.backend.
-    Reading only the config half made a spec pinned to codex (or an env
-    override) project as review-ungated - a merged spec folded to done with
-    no shipped completion review - and vice versa."""
-    per = (spec_data or {}).get("default_review")
-    if isinstance(per, str) and per.strip():
-        return not _backend_off(per)
-    env = os.environ.get("FLOW_REVIEW_BACKEND")
-    if isinstance(env, str) and env.strip():
-        return not _backend_off(env)
-    review = dict_(config.get("review")).get("backend")
-    if review is None:
-        return False
-    if isinstance(review, str):
-        return not _backend_off(review)
-    return True
 
 
 def _card_in_ready_state(provider: str, config: dict, parent: dict) -> bool:
@@ -76,7 +48,7 @@ def _card_in_ready_state(provider: str, config: dict, parent: dict) -> bool:
 
 
 def _current_git_branch(repo_root: Path) -> Optional[str]:
-    """Return the active non-default git branch name, or None."""
+    """Return the active git branch name, or None when detached."""
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -86,7 +58,7 @@ def _current_git_branch(repo_root: Path) -> Optional[str]:
     except (subprocess.CalledProcessError, OSError):
         return None
     name = result.stdout.strip()
-    if not name or name in ("HEAD", "main", "master"):
+    if not name or name == "HEAD":
         return None
     return name
 

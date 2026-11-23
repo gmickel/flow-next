@@ -1,28 +1,15 @@
-"""Deterministic pull-side projections owned by the lifecycle facade."""
+"""Deterministic pull-side projections shared by wire and status."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlencode
 
-from ..lifecycle.helpers import Execute, Result, dict_
+from ..lifecycle.helpers import dict_
 from ..types import ErrorClass, TrackerError
-from ..wire import (_PAGE_SIZE, _destination, _gh_repo, _gl_project, _jira,
-                    _jira_base, _rest_drain, github, gitlab, linear)
 
 
 def _norm(value: Any) -> str:
     return str(value or "").strip().casefold()
-
-
-def _error_data(err: TrackerError) -> dict:
-    return {
-        "class": err.cls.value,
-        "subtype": err.subtype,
-        "message": err.message,
-        "details": err.details,
-    }
 
 
 def _ready_state(config: dict) -> str | None:
@@ -65,129 +52,3 @@ def _desired(provider: str, issue: dict, ready_state: str
             subtype="readiness_shape",
         )
     return _norm(status_name) == _norm(ready_state)
-
-
-def _config_exists(provider: str, config: dict, ready_state: str,
-                   execute: Execute) -> bool | TrackerError:
-    """Prove a false match is genuine, not stale readyState config."""
-    dest = _destination(config)
-    if isinstance(dest, TrackerError):
-        return dest
-
-    if provider == "github":
-        repo = _gh_repo(dest)
-        if isinstance(repo, TrackerError):
-            return repo
-        out = github._cli(  # noqa: SLF001 - same package transport primitive
-            execute, "github", config, "facade-readiness-exists", "GET",
-            f"repos/{repo}/labels/{quote(ready_state, safe='')}",
-            idempotent=True,
-        )
-        if isinstance(out, TrackerError):
-            if out.cls is ErrorClass.NOT_FOUND:
-                return False
-            return out
-        return isinstance(out, dict) and _norm(out.get("name")) == _norm(ready_state)
-
-    if provider == "gitlab":
-        project = _gl_project(dest)
-        if isinstance(project, TrackerError):
-            return project
-        def fetch_labels_page(page: int) -> Result:
-            query = urlencode({
-                'search': ready_state,
-                'per_page': _PAGE_SIZE,
-                'page': page,
-            })
-            return gitlab._cli(  # noqa: SLF001 - package transport primitive
-                execute, "gitlab", config, "facade-readiness-exists", "GET",
-                f"projects/{project}/labels?{query}", idempotent=True,
-            )
-
-        drained = _rest_drain(fetch_labels_page)
-        if isinstance(drained, TrackerError):
-            return drained
-        labels, truncated = drained
-        exists = any(
-            isinstance(label, dict)
-            and _norm(label.get("name")) == _norm(ready_state)
-            for label in labels
-        )
-        if exists:
-            return True
-        if truncated:
-            return TrackerError(
-                ErrorClass.TRANSPORT,
-                "gitlab labels pages truncated at drain cap; readyState "
-                "absence unproven",
-                subtype="readiness_truncated",
-            )
-        return False
-
-    if provider == "linear":
-        team_id = dest.get("teamId")
-        if not isinstance(team_id, str) or not team_id:
-            return TrackerError(
-                ErrorClass.UNRESOLVED, "linear destination missing teamId",
-                subtype="destination")
-        out = linear._gql(  # noqa: SLF001 - same package transport primitive
-            execute, "facade-readiness-exists",
-            "query($team: ID!) { workflowStates(first: 100, "
-            "filter: { team: { id: { eq: $team } } }) { "
-            "nodes { name } pageInfo { hasNextPage } } }",
-            {"team": team_id}, idempotent=True,
-        )
-        if isinstance(out, TrackerError):
-            return out
-        conn = out.get("workflowStates") if isinstance(out, dict) else None
-        if not isinstance(conn, dict) or not isinstance(conn.get("nodes"), list):
-            return TrackerError(
-                ErrorClass.TRANSPORT,
-                "linear workflow states response is malformed",
-                subtype="readiness_shape")
-        page = conn.get("pageInfo") if isinstance(conn.get("pageInfo"), dict) else {}
-        if page.get("hasNextPage"):
-            return TrackerError(
-                ErrorClass.TRANSPORT,
-                "linear workflow states listing is truncated; readiness untouched",
-                subtype="readiness_truncated")
-        return any(
-            isinstance(state, dict)
-            and _norm(state.get("name")) == _norm(ready_state)
-            for state in conn["nodes"]
-        )
-
-    if provider == "jira":
-        project = dest.get("projectKey")
-        if not isinstance(project, str) or not project:
-            return TrackerError(
-                ErrorClass.UNRESOLVED, "jira destination missing projectKey",
-                subtype="destination")
-        base = _jira_base(config, dest)
-        if isinstance(base, TrackerError):
-            return base
-        api_version = dest.get("apiVersion") or 2
-        out = _jira(
-            execute, "facade-readiness-exists", "GET",
-            f"{base}/rest/api/{api_version}/project/"
-            f"{quote(project, safe='')}/statuses",
-            idempotent=True,
-        )
-        if isinstance(out, TrackerError):
-            return out
-        if not isinstance(out, list):
-            return TrackerError(
-                ErrorClass.TRANSPORT, "jira project statuses response is malformed",
-                subtype="readiness_shape")
-        names = {
-            _norm(status.get("name"))
-            for issue_type in out if isinstance(issue_type, dict)
-            for status in (
-                issue_type.get("statuses")
-                if isinstance(issue_type.get("statuses"), list) else []
-            )
-            if isinstance(status, dict)
-        }
-        return _norm(ready_state) in names
-
-    return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")

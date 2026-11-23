@@ -289,12 +289,6 @@ def flow_to_normalized(spec_data: dict, pr_evidence: str,
     return "backlog"
 
 
-def _task_status(task: Any) -> str:
-    if isinstance(task, dict):
-        return str(task.get("status") or "todo")
-    return "todo"
-
-
 # ---------------------------------------------------------------------------
 # who-wins decide (deadlock FIRST)
 # ---------------------------------------------------------------------------
