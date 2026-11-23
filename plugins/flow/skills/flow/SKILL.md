@@ -11,13 +11,13 @@ Route on intent, not phrasing. Choose **ceremony** and **kind** independently, a
 - **Spec (`spec`):** new behaviour, multi-area or multi-person work, briefs, substantive issues, unclear criteria, or risk (shared state, concurrency, auth, money, data layout). On an existing spec, take open questions to their role owner; build once settled.
 - **Goal (`goal`):** multi-PR outcomes, attended or `--auto`.
 
-Spec and goal work runs spec, build, review, and PR, reading each playbook in turn; attended runs stop at the open PR unless asked otherwise.
+Spec and goal work runs spec (including its build part), review, and PR, reading each playbook in turn; attended runs stop at the open PR unless asked otherwise.
 
 For "what would you do", name the route and reason without editing. With no input, report what is in progress, waiting on the person, and next. When work stopped part-way, inspect spec, branch, and PR to continue.
 
 ## Playbooks
 
-- **Unattended:** `unattended` (`--auto` spec, or one step per invocation for a scheduler), `issue-start` (`--auto` with `--from-issue`, or no item when tracker linked).
+- **Unattended:** `unattended` (`--auto` spec, one step per invocation for a scheduler, or `--auto` with no item and no tracker linked), `issue-start` (`--auto` with `--from-issue`, or no item when tracker linked).
 - **Kind:** `defect` (bug/failure), `cleanup` (behaviour-preserving refactor), `measure` (slowness, one-off metric, prompt/skill/instruction edit), `hill-climb` (iterating a metric to target), `question` (read-only how/why or profile/trace/crash diagnosis), `prototype` (observable design fork), `repeated-mistake` (recurring agent mistake).
 - **Delivery:** `orchestrate` (another model/harness when asked), `review` (work, branch, diff, or merge safety), `pr` (open/update PR), `feedback` (PR comments), `land` (merge, or through merge).
 - **Proof and setup:** `prove-live` (live proof for observable behaviour or reproduced defects), `prime` (ready a repo), `doctor` (setup check), `tracker` (link/check issue), `port` (convert Flow-Next Classic repo).

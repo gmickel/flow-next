@@ -8,7 +8,7 @@ When intent cannot yet be stated as criteria, draft the spec with its open quest
 
 Each open question names its owner role; leave other roles' questions open and speak to product owners in plain language. When running something settles a technical unknown, run it and record the result under `## Decision Context` instead. A spec changing more than one repo lists each in frontmatter, and each repo gets its own branch and PR linked from the spec.
 
-End every spec write with a compact visual digest leading with `[inferred]` items. Have another model review the spec only when asked, when design risk is high, or before sharing it with other people—never as a default step.
+End every spec write with a compact visual digest leading with `[inferred]` items. Have another model review the spec only when asked, when design risk is high, or before sharing it with other people; it is not a default step.
 
 ## Handover
 

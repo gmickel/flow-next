@@ -12,11 +12,12 @@ End with exactly one fixed line parsed by outside tools:
 
 `PILOT_VERDICT=<CODE> spec=<id> stage=<stage> reason="<one line>"`
 
-Stages are `spec`, `build`, `review`, `pr`, and `land`. Include `pr=<number>` in `reason` once a PR exists, and `merged=<sha>` after a merge.
+Stages are `spec`, `build`, `review`, `pr`, and `land`; use `-` for `spec` or `stage` when none applies. Include `pr=<number>` in `reason` once a PR exists, and `merged=<sha>` after a merge.
 
 - `ADVANCED`: finished a stage; more work remains.
 - `NO_WORK`: nothing eligible to run.
 - `DEFERRED_TO_LAND`: the PR is ready to merge, waiting on merge consent or the caller.
 - `BLOCKED`: a transient failure stopped the run; nothing changed.
-- `NEEDS_HUMAN`: stopped for a person after posting and un-readying the item.
+- `ASKED`: posted closing questions on an issue that missed the bar and moved it out of ready.
+- `NEEDS_HUMAN`: stopped for a person on any other decision or failure after posting and un-readying the item.
 - `GOAL_MET`: all criteria of a goal spec are met.
