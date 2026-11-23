@@ -251,6 +251,71 @@ class BitbucketWaitAndMergeTests(ForgeTestCase):
         self.assertEqual((got["merged"], got["reason"]), (False, "head_moved"))
         self.assertFalse(any("merge" in " ".join(c) for c in fake.calls))
 
+    def _merge_post_10(self, **overrides):
+        return {
+            **fixture("land-merge-race"),
+            "argv": ["bkt", "--context", "flownextnew", "api", f"{REPO}/pullrequests/10/merge",
+                     "-X", "POST", "-d", '{"merge_strategy":"squash","close_source_branch":true}'],
+            **overrides,
+        }
+
+    def _merged_10(self):
+        def _edit(pr):
+            pr["source"]["commit"]["hash"] = READY[:12]
+            pr["merge_commit"]["hash"] = "999999999999"
+        return derived("land-pr-race-merged", _edit, argv=api(f"{REPO}/pullrequests/10"))
+
+    def test_merge_retries_confirming_read_after_exit_zero(self):
+        pr_argv = api(f"{REPO}/pullrequests/10")
+        post = self._merge_post_10()
+        merged = self._merged_10()
+        read_fail = under("pr-branch-missing-repo", pr_argv)
+        still_open = fixture("land-pr-ready")
+
+        for label, first_after in (("read error", read_fail), ("still open", still_open)):
+            with self.subTest(label):
+                clock = self._clock()
+                fake = BktCli(bkt=[fixture("land-pr-ready"), fixture("land-commit-ready"),
+                                   post, first_after, merged])
+                got = self.run_with(fake, lambda: f.forge_merge(self.repo, 10, READY, sleep=clock.sleep))
+                self.assertEqual(got, {"merged": True, "merge_commit": "999999999999",
+                                       "reason": "merged", "message": "squash merged"})
+                self.assertEqual(len([c for c in fake.calls if c == post["argv"]]), 1)
+                self.assertEqual(len([c for c in fake.calls if c == pr_argv]), 3)  # 1 pre-check + 2 confirming reads
+                self.assertEqual(clock.sleeps, [f._MERGE_CONFIRM_INTERVAL_S])
+
+    def test_merge_returns_unconfirmed_when_confirming_reads_never_succeed(self):
+        pr_argv = api(f"{REPO}/pullrequests/10")
+        post = self._merge_post_10()
+        read_fail = under("pr-branch-missing-repo", pr_argv)
+        still_open = fixture("land-pr-ready")
+        expected_reads = 1 + f._MERGE_CONFIRM_RETRIES
+        expected_sleeps = [f._MERGE_CONFIRM_INTERVAL_S] * f._MERGE_CONFIRM_RETRIES
+
+        for label, bad_after in (("read errors", read_fail), ("still open", still_open)):
+            with self.subTest(label):
+                clock = self._clock()
+                fake = BktCli(bkt=[fixture("land-pr-ready"), fixture("land-commit-ready"),
+                                   post, *([bad_after] * expected_reads)])
+                got = self.run_with(fake, lambda: f.forge_merge(self.repo, 10, READY, sleep=clock.sleep))
+                self.assertEqual((got["merged"], got["reason"], got["merge_commit"]), (False, "unconfirmed", None))
+                self.assertIn("merge command succeeded", got["message"])
+                self.assertIn("could not be confirmed", got["message"])
+                self.assertEqual(len([c for c in fake.calls if c == post["argv"]]), 1)
+                self.assertEqual(len([c for c in fake.calls if c == pr_argv]), 1 + expected_reads)
+                self.assertEqual(clock.sleeps, expected_sleeps)
+
+    def test_merge_refused_behaves_as_before(self):
+        pr_argv = api(f"{REPO}/pullrequests/10")
+        refused = self._merge_post_10(returncode=1, stdout="", stderr="merge refused by branch restriction")
+        clock = self._clock()
+        fake = BktCli(bkt=[fixture("land-pr-ready"), fixture("land-commit-ready"), refused])
+        got = self.run_with(fake, lambda: f.forge_merge(self.repo, 10, READY, sleep=clock.sleep))
+        self.assertEqual((got["merged"], got["reason"]), (False, "not_mergeable"))
+        self.assertEqual(len([c for c in fake.calls if c == refused["argv"]]), 1)
+        self.assertEqual(len([c for c in fake.calls if c == pr_argv]), 1)  # pre-check only
+        self.assertEqual(clock.sleeps, [])
+
 
 if __name__ == "__main__":
     unittest.main()

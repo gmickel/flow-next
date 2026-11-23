@@ -39,7 +39,9 @@ class FakeCli:
     def __init__(self, origin=None, glab=(), gh_hosts=(), glab_hosts=("localhost:8929",),
                  ssh=None, glab_auth=None, gh=None):
         self.origin, self.gh_hosts, self.glab_hosts = origin, set(gh_hosts), set(glab_hosts)
-        self.recorded = {tuple(fx["argv"]): fx for fx in glab}
+        self.recorded: dict[tuple, list[dict]] = {}
+        for fx in glab:
+            self.recorded.setdefault(tuple(fx["argv"]), []).append(fx)
         self.ssh, self.glab_auth, self.gh, self.calls = ssh or {}, glab_auth, gh, []
 
     def __call__(self, argv, *args, **kwargs):
@@ -67,7 +69,8 @@ class FakeCli:
                                             else "auth-status-unknown-host"))
             return done(fx["returncode"], fx["stdout"], fx["stderr"])
         if argv[0] == "glab":
-            fx = self.recorded.get(tuple(argv))
+            queue = self.recorded.get(tuple(argv))
+            fx = (queue.pop(0) if len(queue) > 1 else queue[0]) if queue else None
             if fx is None:
                 raise AssertionError(f"no recorded glab answer for {argv}")
             for key, value in fx["env"].items():
@@ -614,6 +617,66 @@ class GitLabWaitAndMergeTests(ForgeTestCase):
         fake_moved = FakeCli(GITLAB_ORIGIN, glab=[moved])
         got_moved = self.run_with(fake_moved, lambda: f.forge_merge(self.repo, 14, stale))
         self.assertEqual((got_moved["merged"], got_moved["reason"]), (False, "head_moved"))
+
+    def _merge_put_14(self, head=None, **overrides):
+        fx = {**fixture("land-merge"), "env": {"GITLAB_HOST": "localhost:8929"}}
+        fx["argv"] = [
+            "glab", "api", "-X", "PUT", "projects/flownext%2Fflownext/merge_requests/14/merge",
+            "-F", "squash=true", "-F", "should_remove_source_branch=true", "-f", f"sha={head or self.HEAD}",
+        ]
+        fx.update(overrides)
+        return fx
+
+    def test_merge_retries_confirming_read_after_exit_zero(self):
+        put = self._merge_put_14()
+        read_argv = ["glab", "api", "projects/flownext%2Fflownext/merge_requests/14"]
+        read_fail = {**fixture("mr-missing-read"), "argv": read_argv, "env": {"GITLAB_HOST": "localhost:8929"}}
+        locked = as_read("land-mr-merged", "/merge_requests/14",
+                         lambda mr: mr.update(state="locked", merge_commit_sha=None, squash_commit_sha=None))
+        merged = as_read("land-mr-merged", "/merge_requests/14")
+
+        for label, first_after in (("read error", read_fail), ("still locked", locked)):
+            with self.subTest(label):
+                clock = _FakeClock()
+                fake = FakeCli(GITLAB_ORIGIN, glab=[put, first_after, merged])
+                got = self.run_with(fake, lambda: f.forge_merge(self.repo, 14, self.HEAD, sleep=clock.sleep))
+                self.assertEqual(got, {"merged": True, "merge_commit": self.MERGE_SHA,
+                                       "reason": "merged", "message": "squash merged"})
+                self.assertEqual(len([c for c in fake.calls if c == put["argv"]]), 1)
+                self.assertEqual(len([c for c in fake.calls if c == read_argv]), 2)
+                self.assertEqual(clock.sleeps, [f._MERGE_CONFIRM_INTERVAL_S])
+
+    def test_merge_returns_unconfirmed_when_confirming_reads_never_succeed(self):
+        put = self._merge_put_14()
+        read_argv = ["glab", "api", "projects/flownext%2Fflownext/merge_requests/14"]
+        read_fail = {**fixture("mr-missing-read"), "argv": read_argv, "env": {"GITLAB_HOST": "localhost:8929"}}
+        locked = as_read("land-mr-merged", "/merge_requests/14",
+                         lambda mr: mr.update(state="locked", merge_commit_sha=None, squash_commit_sha=None))
+        expected_reads = 1 + f._MERGE_CONFIRM_RETRIES
+        expected_sleeps = [f._MERGE_CONFIRM_INTERVAL_S] * f._MERGE_CONFIRM_RETRIES
+
+        for label, bad_after in (("read errors", read_fail), ("still locked", locked)):
+            with self.subTest(label):
+                clock = _FakeClock()
+                fake = FakeCli(GITLAB_ORIGIN, glab=[put, *([bad_after] * expected_reads)])
+                got = self.run_with(fake, lambda: f.forge_merge(self.repo, 14, self.HEAD, sleep=clock.sleep))
+                self.assertEqual((got["merged"], got["reason"], got["merge_commit"]), (False, "unconfirmed", None))
+                self.assertIn("merge command succeeded", got["message"])
+                self.assertIn("could not be confirmed", got["message"])
+                self.assertEqual(len([c for c in fake.calls if c == put["argv"]]), 1)
+                self.assertEqual(len([c for c in fake.calls if c == read_argv]), expected_reads)
+                self.assertEqual(clock.sleeps, expected_sleeps)
+
+    def test_merge_refused_behaves_as_before(self):
+        put = self._merge_put_14(returncode=1, stdout="", stderr="405 Method Not Allowed")
+        read_argv = ["glab", "api", "projects/flownext%2Fflownext/merge_requests/14"]
+        clock = _FakeClock()
+        fake = FakeCli(GITLAB_ORIGIN, glab=[put])
+        got = self.run_with(fake, lambda: f.forge_merge(self.repo, 14, self.HEAD, sleep=clock.sleep))
+        self.assertEqual((got["merged"], got["reason"]), (False, "not_mergeable"))
+        self.assertEqual(len([c for c in fake.calls if c == put["argv"]]), 1)
+        self.assertEqual(len([c for c in fake.calls if c == read_argv]), 0)
+        self.assertEqual(clock.sleeps, [])
 
 
 if __name__ == "__main__":

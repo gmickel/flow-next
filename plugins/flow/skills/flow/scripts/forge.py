@@ -713,6 +713,19 @@ def _bitbucket_wait_probe(repo: Path, origin: "ForgeOrigin", number: int) -> dic
     return _wait_row("ready", head, "build green and mergeable")
 
 
+def _confirm_merge(probe: Any, *, sleep: Any = None) -> dict:
+    pause = time.sleep if sleep is None else sleep
+    last_err = ""
+    for attempt in range(1 + _MERGE_CONFIRM_RETRIES):
+        if attempt > 0:
+            pause(_MERGE_CONFIRM_INTERVAL_S)
+        row, last_err = probe()
+        if row is not None:
+            return row
+    msg = "merge command succeeded but could not be confirmed"
+    return _merge_row(False, "unconfirmed", f"{msg}: {last_err}" if last_err else msg)
+
+
 def _github_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str, *,
                   sleep: Any = None) -> dict:
     proc, err = _run_forge_cmd(
@@ -720,32 +733,31 @@ def _github_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str, *,
         cwd=repo, timeout=_FORGE_MERGE_TIMEOUT_S)
     if proc is None:
         return _merge_row(False, "error", err)
-    detail = _first_line(proc.stderr or proc.stdout, f"gh exit {proc.returncode}")
-    attempts = 1 + _MERGE_CONFIRM_RETRIES if proc.returncode == 0 else 1
-    pause = time.sleep if sleep is None else sleep
-    view_err = ""
-    for attempt in range(attempts):
-        if attempt > 0:
-            pause(_MERGE_CONFIRM_INTERVAL_S)
+
+    def probe() -> tuple[Optional[dict], str]:
         after, view_err = _github_pr_view(repo, origin, number, "state,headRefOid,mergeCommit,mergeQueueEntry")
         if after is not None:
             if str(after.get("state") or "").upper() == "MERGED" and _field(after, "mergeCommit", "oid"):
-                return _merge_row(True, "merged", "squash merged", merge_commit=after["mergeCommit"]["oid"])
+                return _merge_row(True, "merged", "squash merged", merge_commit=after["mergeCommit"]["oid"]), ""
             if after.get("mergeQueueEntry") is not None:
-                return _merge_row(False, "queued", "added to merge queue")
+                return _merge_row(False, "queued", "added to merge queue"), ""
             if isinstance(after.get("headRefOid"), str) and after["headRefOid"] != head:
-                return _merge_row(False, "head_moved", f"head moved to {after['headRefOid']}")
-    low = detail.lower()
+                return _merge_row(False, "head_moved", f"head moved to {after['headRefOid']}"), ""
+        return None, view_err
+
     if proc.returncode != 0:
+        row, _ = probe()
+        if row is not None:
+            return row
+        detail = _first_line(proc.stderr or proc.stdout, f"gh exit {proc.returncode}")
+        low = detail.lower()
         reason = "head_moved" if ("head" in low and ("match" in low or "modified" in low)) else "not_mergeable"
         return _merge_row(False, reason, detail)
-    msg = "merge command succeeded but could not be confirmed"
-    if view_err:
-        msg = f"{msg}: {view_err}"
-    return _merge_row(False, "unconfirmed", msg)
+    return _confirm_merge(probe, sleep=sleep)
 
 
-def _gitlab_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str) -> dict:
+def _gitlab_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str, *,
+                  sleep: Any = None) -> dict:
     if not origin.project:
         return _merge_row(False, "error", "origin project unknown")
     env = {**os.environ, "GITLAB_HOST": origin.host} if origin.host else None
@@ -759,15 +771,20 @@ def _gitlab_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str) -> 
         detail = _first_line(proc.stderr or proc.stdout, f"glab exit {proc.returncode}")
         low = (proc.stderr + "\n" + proc.stdout).lower()
         return _merge_row(False, "head_moved" if ("409" in low or "sha does not match" in low) else "not_mergeable", detail)
-    after = _glab_get(origin, f"{_gitlab_project(origin)}/merge_requests/{number}",
-                      time.monotonic() + _FORGE_PROBE_TIMEOUT_S)
-    mc = after.get("merge_commit_sha") or after.get("squash_commit_sha") if isinstance(after, dict) else None
-    if isinstance(after, dict) and after.get("state") == "merged" and isinstance(mc, str) and mc:
-        return _merge_row(True, "merged", "squash merged", merge_commit=mc)
-    return _merge_row(False, "error", "merge not confirmed by post-merge read")
+
+    def probe() -> tuple[Optional[dict], str]:
+        after = _glab_get(origin, f"{_gitlab_project(origin)}/merge_requests/{number}",
+                          time.monotonic() + _FORGE_PROBE_TIMEOUT_S)
+        mc = after.get("merge_commit_sha") or after.get("squash_commit_sha") if isinstance(after, dict) else None
+        if isinstance(after, dict) and after.get("state") == "merged" and isinstance(mc, str) and mc:
+            return _merge_row(True, "merged", "squash merged", merge_commit=mc), ""
+        return None, ""
+
+    return _confirm_merge(probe, sleep=sleep)
 
 
-def _bitbucket_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str) -> dict:
+def _bitbucket_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str, *,
+                     sleep: Any = None) -> dict:
     if not (origin.project and re.fullmatch(r"[^/\s?#%]+/[^/\s?#%]+", origin.project)):
         return _merge_row(False, "error", "origin project unknown")
     deadline = time.monotonic() + _FORGE_MERGE_TIMEOUT_S
@@ -798,16 +815,20 @@ def _bitbucket_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str) 
         return _merge_row(False, "error", err)
     if proc.returncode != 0:
         return _merge_row(False, "not_mergeable", _first_line(proc.stderr or proc.stdout, f"bkt exit {proc.returncode}"))
-    after = _bkt(["--context", context, "api", pr_path], time.monotonic() + _FORGE_PROBE_TIMEOUT_S)
-    mc = _field(after, "merge_commit", "hash")
-    if isinstance(after, dict) and after.get("state") == "MERGED" and isinstance(mc, str) and mc:
-        merged_head = _field(after, "source", "commit", "hash")
-        if isinstance(merged_head, str) and not head.startswith(merged_head):
-            return _merge_row(True, "merged_head_moved",
-                              f"merged, but head moved during merge (expected {head[:12]}, merged {merged_head})",
-                              merge_commit=mc)
-        return _merge_row(True, "merged", "squash merged", merge_commit=mc)
-    return _merge_row(False, "error", "merge not confirmed by post-merge read")
+
+    def probe() -> tuple[Optional[dict], str]:
+        after = _bkt(["--context", context, "api", pr_path], time.monotonic() + _FORGE_PROBE_TIMEOUT_S)
+        mc = _field(after, "merge_commit", "hash")
+        if isinstance(after, dict) and after.get("state") == "MERGED" and isinstance(mc, str) and mc:
+            merged_head = _field(after, "source", "commit", "hash")
+            if isinstance(merged_head, str) and not head.startswith(merged_head):
+                return _merge_row(True, "merged_head_moved",
+                                  f"merged, but head moved during merge (expected {head[:12]}, merged {merged_head})",
+                                  merge_commit=mc), ""
+            return _merge_row(True, "merged", "squash merged", merge_commit=mc), ""
+        return None, ""
+
+    return _confirm_merge(probe, sleep=sleep)
 
 
 # Forge name -> its reads. A forge claims an origin host through `owns_host`;
@@ -951,7 +972,7 @@ def forge_merge(repo: Path, number: int, head: str, *, sleep: Any = None) -> dic
     merge_fn, forge, origin = _forge_read(repo, "merge")
     if merge_fn is None:
         return _merge_row(False, "error", f"forge merge is unsupported on {forge}")
-    if sleep is not None and forge == "github":
+    if sleep is not None:
         return merge_fn(repo, origin, number, head_norm, sleep=sleep)
     return merge_fn(repo, origin, number, head_norm)
 
