@@ -83,6 +83,16 @@ class GitHub:
         endpoint = f"repos/{repository}/git/trees/{oid}"
         return self.api(endpoint, recursive=recursive)
 
+    def get_commit_tree(self, repository: str, oid: str) -> str:
+        """Resolve a commit to the immutable tree object it names."""
+        payload = self.api(f"repos/{repository}/git/commits/{oid}")
+        if require_oid(payload.get("sha"), "commit response") != oid.lower():
+            raise SelectorError(f"GitHub returned the wrong commit object for {oid}")
+        tree = payload.get("tree")
+        if not isinstance(tree, dict):
+            raise SelectorError(f"GitHub returned no root tree for commit {oid}")
+        return require_oid(tree.get("sha"), f"root tree for commit {oid}")
+
     def get_blob(self, repository: str, oid: str) -> dict:
         key = repository, oid.lower()
         if key not in self.blobs:
@@ -173,18 +183,19 @@ def tree_entries(payload: dict, expected_oid: str, *, recursive: bool) -> list[d
 
 def tree_map(gh: GitHub, repository: str, commit_oid: str) -> dict[str, dict]:
     """Read the recursive fast path, falling back to only the .flow subtrees."""
-    recursive_payload = gh.get_tree(repository, commit_oid, recursive=True)
-    if require_oid(recursive_payload.get("sha"), "recursive tree response") != commit_oid.lower():
-        raise SelectorError(f"GitHub returned the wrong tree object for {commit_oid}")
+    root_oid = gh.get_commit_tree(repository, commit_oid)
+    recursive_payload = gh.get_tree(repository, root_oid, recursive=True)
+    if require_oid(recursive_payload.get("sha"), "recursive tree response") != root_oid:
+        raise SelectorError(f"GitHub returned the wrong tree object for {root_oid}")
     if recursive_payload.get("truncated") is False:
         return {
             entry["path"]: entry
-            for entry in tree_entries(recursive_payload, commit_oid, recursive=True)
+            for entry in tree_entries(recursive_payload, root_oid, recursive=True)
         }
     if recursive_payload.get("truncated") is not True:
-        raise SelectorError(f"GitHub returned an incomplete tree response for {commit_oid}")
+        raise SelectorError(f"GitHub returned an incomplete tree response for {root_oid}")
 
-    root = tree_entries(gh.get_tree(repository, commit_oid), commit_oid, recursive=False)
+    root = tree_entries(gh.get_tree(repository, root_oid), root_oid, recursive=False)
     flow_entry = {entry["path"]: entry for entry in root}.get(".flow")
     if flow_entry is None:
         return {}

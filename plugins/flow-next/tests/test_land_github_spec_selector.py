@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import hashlib
 import io
 import json
 import subprocess
@@ -21,6 +22,10 @@ import select_specs
 
 def oid(letter: str) -> str:
     return letter * 40
+
+
+def root_tree_oid(commit_oid: str) -> str:
+    return hashlib.sha1(f"root:{commit_oid}".encode("ascii")).hexdigest()
 
 
 def entry(path: str, sha: str, kind: str = "blob") -> dict:
@@ -60,6 +65,7 @@ class FakeGitHub:
     def __init__(self):
         self.pulls: deque[dict] = deque()
         self.refs: dict[str, deque[dict]] = defaultdict(deque)
+        self.commits: dict[tuple[str, str], dict] = {}
         self.trees: dict[tuple[str, str, bool], deque[dict]] = defaultdict(deque)
         self.blobs: dict[tuple[str, str], dict] = {}
         self.calls: list[list[str]] = []
@@ -85,10 +91,18 @@ class FakeGitHub:
                 response = self.pulls.popleft()
             elif endpoint.startswith("repos/") and "/git/ref/" in endpoint:
                 response = self.refs[endpoint].popleft()
+            elif endpoint.startswith("repos/") and "/git/commits/" in endpoint:
+                prefix, sha = endpoint.rsplit("/", 1)
+                repo = prefix.removeprefix("repos/").removesuffix("/git/commits")
+                response = self.commits[(repo, sha)]
             elif endpoint.startswith("repos/") and "/git/trees/" in endpoint:
                 prefix, sha = endpoint.rsplit("/", 1)
                 repo = prefix.removeprefix("repos/").removesuffix("/git/trees")
-                response = self.trees[(repo, sha, recursive)].popleft()
+                if (repo, sha) in self.commits:
+                    root_oid = self.commits[(repo, sha)]["tree"]["sha"]
+                    response = dict(self.trees[(repo, root_oid, recursive)][0], sha=sha)
+                else:
+                    response = self.trees[(repo, sha, recursive)].popleft()
             elif endpoint.startswith("repos/") and "/git/blobs/" in endpoint:
                 prefix, sha = endpoint.rsplit("/", 1)
                 repo = prefix.removeprefix("repos/").removesuffix("/git/blobs")
@@ -115,6 +129,7 @@ def flow_tree_set(
     recursive: dict | None = None,
 ) -> None:
     """Register recursive and subtree responses for a commit."""
+    root_oid = root_tree_oid(commit)
     flow_oid, specs_oid, tasks_oid = oid("1"), oid("2"), oid("3")
     spec_entries = []
     for spec_id, blob_oid, data in specs:
@@ -135,9 +150,13 @@ def flow_tree_set(
             *[dict(item, path=f".flow/specs/{item['path']}") for item in spec_entries],
             *[dict(item, path=f".flow/tasks/{item['path']}") for item in task_entries],
         ]
-        recursive = tree(commit, full_entries)
-    gh.add_tree(repository, commit, recursive, recursive=True)
-    gh.add_tree(repository, commit, tree(commit, root_entries))
+        recursive = tree(root_oid, full_entries)
+    gh.commits[(repository, commit)] = {
+        "sha": commit,
+        "tree": {"sha": root_oid},
+    }
+    gh.add_tree(repository, root_oid, recursive, recursive=True)
+    gh.add_tree(repository, root_oid, tree(root_oid, root_entries))
     gh.add_tree(repository, flow_oid, tree(flow_oid, flow_entries))
     gh.add_tree(repository, specs_oid, tree(specs_oid, spec_entries))
     gh.add_tree(repository, tasks_oid, tree(tasks_oid, task_entries))
@@ -158,6 +177,92 @@ def run_selector(gh: FakeGitHub, expected: dict | None = None) -> dict:
 class LandGitHubSpecSelectorTest(unittest.TestCase):
     def configure_pull(self, gh: FakeGitHub, head: str = "a") -> None:
         gh.add_pr_reads(pull(head), pull(head))
+
+    def test_commit_and_tree_requests_match_observed_github_identity_behavior(self):
+        gh = FakeGitHub()
+        repository = "gmickel/flow-next"
+        # These object IDs are the live GitHub commit/root-tree pair; tree entries stay compact.
+        commit_oid = "7296bf7c89902f937588dc0d8f60e82059b0cd2d"
+        root_oid = "0c4827605b3367c4c1fbd86c093f98c971fa0754"
+        gh.commits[(repository, commit_oid)] = {
+            "sha": commit_oid,
+            "tree": {"sha": root_oid},
+        }
+        recursive_entries = [entry(".flow/specs/fn-1.json", oid("a"))]
+        root_entries = [entry(".flow", oid("b"), "tree")]
+        gh.add_tree(repository, root_oid, tree(root_oid, recursive_entries), recursive=True)
+        gh.add_tree(repository, root_oid, tree(root_oid, root_entries))
+
+        commit = gh.run([
+            "gh", "api", "-X", "GET", f"repos/{repository}/git/commits/{commit_oid}"
+        ])
+        commit_payload = json.loads(commit.stdout)
+        self.assertEqual(commit_payload["sha"], commit_oid)
+        self.assertEqual(commit_payload["tree"]["sha"], root_oid)
+
+        for recursive in (False, True):
+            suffix = ["-f", "recursive=1"] if recursive else []
+            by_commit = gh.run([
+                "gh", "api", "-X", "GET",
+                f"repos/{repository}/git/trees/{commit_oid}", *suffix,
+            ])
+            by_tree = gh.run([
+                "gh", "api", "-X", "GET",
+                f"repos/{repository}/git/trees/{root_oid}", *suffix,
+            ])
+            commit_tree, root_tree = json.loads(by_commit.stdout), json.loads(by_tree.stdout)
+            self.assertEqual(commit_tree["sha"], commit_oid)
+            self.assertEqual(root_tree["sha"], root_oid)
+            self.assertEqual(commit_tree["tree"], root_tree["tree"])
+
+    def test_selector_requests_tree_ids_and_rejects_inconsistent_commit_or_tree_identity(self):
+        def configured() -> FakeGitHub:
+            gh = FakeGitHub()
+            self.configure_pull(gh)
+            flow_tree_set(
+                gh,
+                "julie/fork",
+                oid("a"),
+                [("fn-11", "b", spec_blob("fn-11", "open", "feature"))],
+                [],
+            )
+            return gh
+
+        gh = configured()
+        result = run_selector(gh)
+        self.assertEqual(result["verdict"], "BLOCKED")
+        tree_calls = [call for call in gh.calls if "/git/trees/" in " ".join(call)]
+        root_oid = gh.commits[("julie/fork", oid("a"))]["tree"]["sha"]
+        self.assertEqual([call[call.index("GET") + 1].rsplit("/", 1)[1] for call in tree_calls], [root_oid])
+
+        wrong_linked_root = configured()
+        wrong_root_oid = oid("f")
+        wrong_linked_root.commits[("julie/fork", oid("a"))]["tree"]["sha"] = wrong_root_oid
+        wrong_linked_root_result = run_selector(wrong_linked_root)
+        self.assertEqual(wrong_linked_root_result["verdict"], "NEEDS_HUMAN")
+        self.assertIn(f"/git/trees/{wrong_root_oid}", wrong_linked_root_result["reason"])
+        self.assertNotIn("selected", wrong_linked_root_result)
+
+        wrong_commit = configured()
+        wrong_commit.commits[("julie/fork", oid("a"))]["sha"] = oid("f")
+        wrong_commit_result = run_selector(wrong_commit)
+        self.assertEqual(wrong_commit_result["verdict"], "NEEDS_HUMAN")
+        self.assertIn("wrong commit object", wrong_commit_result["reason"])
+
+        wrong_tree = configured()
+        root_oid = root_tree_oid(oid("a"))
+        wrong_tree.trees[("julie/fork", root_oid, True)][0]["sha"] = oid("a")
+        self.assertEqual(run_selector(wrong_tree)["verdict"], "NEEDS_HUMAN")
+
+        truncated_wrong_tree = configured()
+        truncated_wrong_tree.trees[("julie/fork", root_oid, True)][0]["truncated"] = True
+        truncated_wrong_tree.trees[("julie/fork", root_oid, True)][0]["sha"] = oid("a")
+        self.assertEqual(run_selector(truncated_wrong_tree)["verdict"], "NEEDS_HUMAN")
+
+        wrong_fallback_tree = configured()
+        wrong_fallback_tree.trees[("julie/fork", root_oid, True)][0]["truncated"] = True
+        wrong_fallback_tree.trees[("julie/fork", root_oid, False)][0]["sha"] = oid("a")
+        self.assertEqual(run_selector(wrong_fallback_tree)["verdict"], "NEEDS_HUMAN")
 
     def test_truncated_head_omitting_open_task_falls_back_and_blocks(self):
         task_path = ".flow/tasks/fn-12.1.json"
@@ -180,7 +285,7 @@ class LandGitHubSpecSelectorTest(unittest.TestCase):
             return gh
 
         full_result = run_selector(configured(None))
-        truncated_head = tree(oid("a"), [entry(".flow", oid("1"), "tree")], truncated=True)
+        truncated_head = tree(root_tree_oid(oid("a")), [entry(".flow", oid("1"), "tree")], truncated=True)
         fallback_gh = configured(truncated_head)
         fallback_result = run_selector(fallback_gh)
         for result in (full_result, fallback_result):
@@ -213,7 +318,7 @@ class LandGitHubSpecSelectorTest(unittest.TestCase):
         flow_tree_set(gh, "julie/fork", oid("a"), [("fn-14", "b", spec)], [(task_path, "c", "blob")])
         gh.add_ref("owner/project", "main", "d")
         gh.add_ref("owner/project", "main", "d")
-        base_recursive = tree(oid("d"), [entry(".flow", oid("4"), "tree")], truncated=True)
+        base_recursive = tree(root_tree_oid(oid("d")), [entry(".flow", oid("4"), "tree")], truncated=True)
         flow_tree_set(
             gh,
             "owner/project",
@@ -226,6 +331,14 @@ class LandGitHubSpecSelectorTest(unittest.TestCase):
         self.assertEqual(result["verdict"], "PASS")
         self.assertEqual(result["selected"], [])
         self.assertEqual(result["snapshot"]["base"]["sha"], oid("d"))
+        self.assertIn(("owner/project", oid("d")), gh.commits)
+        self.assertTrue(
+            any(
+                "repos/owner/project/git/trees/" in " ".join(call)
+                and root_tree_oid(oid("d")) in " ".join(call)
+                for call in gh.calls
+            )
+        )
 
     def test_closed_spec_with_task_is_selected_but_allows_later_gates(self):
         gh = FakeGitHub()
@@ -244,7 +357,7 @@ class LandGitHubSpecSelectorTest(unittest.TestCase):
             ],
             [(".flow/tasks/fn-16.1.json", "c", "blob")],
             recursive=tree(
-                oid("a"),
+                root_tree_oid(oid("a")),
                 [
                     entry(".flow", oid("1"), "tree"),
                     entry(".flow/specs/fn-16.json", oid("b")),
@@ -303,8 +416,10 @@ class LandGitHubSpecSelectorTest(unittest.TestCase):
     def test_established_absence_is_pass_and_does_not_read_a_base(self):
         gh = FakeGitHub()
         gh.add_pr_reads(pull("a"), pull("a"))
-        gh.add_tree("julie/fork", oid("a"), tree(oid("a"), []), recursive=True)
-        gh.add_tree("julie/fork", oid("a"), tree(oid("a"), []))
+        root_oid = root_tree_oid(oid("a"))
+        gh.commits[("julie/fork", oid("a"))] = {"sha": oid("a"), "tree": {"sha": root_oid}}
+        gh.add_tree("julie/fork", root_oid, tree(root_oid, []), recursive=True)
+        gh.add_tree("julie/fork", root_oid, tree(root_oid, []))
         result = run_selector(gh)
         self.assertEqual(result["verdict"], "PASS")
         self.assertEqual(result["selected"], [])
@@ -337,8 +452,10 @@ class LandGitHubSpecSelectorTest(unittest.TestCase):
     def test_incomplete_required_tree_or_unreadable_spec_is_needs_human(self):
         gh = FakeGitHub()
         gh.add_pr_reads(pull("a"))
-        gh.add_tree("julie/fork", oid("a"), tree(oid("a"), [], True), recursive=True)
-        gh.add_tree("julie/fork", oid("a"), tree(oid("a"), [], True))
+        root_oid = root_tree_oid(oid("a"))
+        gh.commits[("julie/fork", oid("a"))] = {"sha": oid("a"), "tree": {"sha": root_oid}}
+        gh.add_tree("julie/fork", root_oid, tree(root_oid, [], True), recursive=True)
+        gh.add_tree("julie/fork", root_oid, tree(root_oid, [], True))
         result = run_selector(gh)
         self.assertEqual(result["verdict"], "NEEDS_HUMAN")
 

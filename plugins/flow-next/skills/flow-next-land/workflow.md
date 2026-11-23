@@ -66,11 +66,12 @@ ref/repository, and normalized PR state must match the initial PR read; a mismat
 Use that full head SHA for checks and `FLOW_HEAD_SHA`, and selected IDs for `FLOW_SPEC_ID` /
 `FLOW_SPEC_IDS`.
 
-The selector reads the head from the PR's head repository, including forks. It tries one recursive
-tree read; if truncated, it discards that result and reads complete `.flow` subtrees by object ID
-without a recursive parameter. It preserves branch-name priority, multiple matches, task path and
-OID comparison, and closed-spec rules. A required read failure is `NEEDS_HUMAN`; established
-absence of specs continues through the other gates. Selected records carry their head blob SHA.
+The selector reads the head from the PR's head repository, including forks. For each commit, it
+resolves and validates the root tree SHA, then reads that tree recursively; if truncated, it
+discards that result and reads complete `.flow` subtrees by object ID without a recursive
+parameter. It preserves branch-name priority, multiple matches, task path and OID comparison, and
+closed-spec rules. A required read failure is `NEEDS_HUMAN`; established absence of specs continues
+through the other gates. Selected records carry their head blob SHA.
 After merge, if tracker sync is active, fetch each selected blob by that SHA from the same head
 repository and pass it to the tracker touchpoint. A failure there retains `MERGED`.
 
