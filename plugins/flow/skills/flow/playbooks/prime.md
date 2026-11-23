@@ -4,12 +4,20 @@ Make one repository ready for agentic work. Prove each outcome by doing it rathe
 
 ## Outcomes
 
-- **Operate** (build, focused test, start, sign in, drive, read logs): prove with bounded, clean-tree runs of the build and a focused test, then start the app, sign in, drive one action, and read logs.
+- **Operate** (build, focused test, start, sign in, drive, read logs): prove with clean-tree runs of the build and a focused test, then start the app, sign in, drive one action, and read logs.
 - **Detect** (a planted defect gets caught): prove by planting a temporary defect, confirming the check fails clearly, then reverting it and confirming the check passes.
 - **Navigate** (only what code cannot show: legacy and frozen areas, owners, misleading spots—never a directory inventory): ask one question for legacy and frozen areas, and prove by verifying each recorded path exists.
 - **Constrain** (team rules where agents meet them): prove by checking rules sit in loaded files and existing checks pass in check mode; suggest a mechanical check only where a cheap tool already exists, never building new enforcement or CI.
 - **Isolate** (two agents work without colliding): prove by running a build or focused test in a temporary second git worktree to catch env or state collisions, then removing it.
 - **Govern** (merge authority, instruction-file owners, and what agents must not read or reach—secrets, production, unnecessary network): prove by checking forge protection, ownership rules, and access limits against what is recorded.
+
+## Order and bounds
+
+Ask first, in one batch and before any proof runs: the legacy and frozen areas, where specs go, and whether to add the Flow sentence. A quick read of the repo is enough to ask them, and the person can answer while the proofs run. If the checkout is behind its remote, say so in that batch and ask whether to update it.
+
+Leave the checkout as found: never pull, fast-forward, or switch the person's branch unasked. New files go on a new branch, uncommitted until the person says.
+
+Give each proof a deadline of a few minutes and run independent proofs at the same time. A proof that hangs, or needs access this session lacks (a container runtime, a login), is reported as unproven with what was tried and its output; do not work around it at length.
 
 ## Acting and leaving behind
 
