@@ -22,28 +22,65 @@ Resolve the exact PR with `gh pr view <PR> --repo <owner/repo>`; read its URL,
 state, `headRefOid`, `headRefName`, head repository, base, and merge commit.
 An unreadable or ambiguous target stops `NEEDS_HUMAN` with the lookup error.
 A closed unmerged PR stops `NO_WORK`, reason `closed unmerged`.
-An already merged PR stops the landing path, reason `already merged`:
-repeat only the configured tracker touchpoint below, then report `MERGED`.
-Do not repair, merge again, or delete a branch on that replay.
+An already merged PR stops the landing path, reason `already merged`: do not repair, merge again,
+or delete a branch. Continue to the tracker touchpoint below. Only if it is active, read the
+original head selection with the bundled selector; ignore its `BLOCKED` gate result on this replay
+and use its selected IDs and blob SHAs for the touchpoint. A selection read failure is a tracker
+touchpoint failure and retains the confirmed `MERGED`.
 
-Read every `.flow/specs/*.json` blob at full `headRefOid` from the PR's
-head repository using the recursive git trees API (`recursive=1`), never local state.
-Select every spec whose `branch_name` equals `headRefName`; several matches are valid.
-If none match, read the `baseRefName` tree from the base repository and select specs with
-`status: done` at head, absent or not done at base, and either a `retired` record at head or at least one
-`.flow/tasks/<spec-id>.*` entry whose tree SHA is absent from, or different in,
-the base tree; also select any spec not done at head whose task entries the PR changes that
-way, so the open-work stop below catches unfinished work built on another branch.
-A closed spec has `status: done` and either a `retired` record or at least one
-`.flow/tasks/<spec-id>.*.json` blob in the same tree. If any selected spec is
-open, stop `BLOCKED`, reason `work not finished` naming every open selection;
-change nothing. An empty selected set is a pull request opened without a spec (make-pr's no-spec
-path): land it through the same gates below, with no spec to check and no tracker touchpoint.
-Missing or malformed blobs, incomplete tree reads (including `truncated: true`), or API errors stop
-`NEEDS_HUMAN`; they are not evidence of no match. Repeat this head-bound
-selection after any head move. A merged replay reads its original head to
-recover matching tracker links, without re-opening the landing gates; a lookup
-failure there is a touchpoint failure and retains the confirmed `MERGED`.
+For an open PR, run the bundled `select_specs.py` beside this workflow, using the URL of this exact
+PR. Resolve the script path from the loaded skill directory, including the generated Codex skill
+directory. Set `LAND_PYTHON` to the working Python 3.11+ command used by bundled flowctl.
+For example, use `(python3)` on Unix or `(py -3)` on Windows. Capture output on non-zero exit:
+
+```bash
+LAND_SELECTOR="<loaded flow-next-land skill directory>/select_specs.py"
+LAND_PYTHON=(python3)
+SELECTOR_RESULT="$("${LAND_PYTHON[@]}" "$LAND_SELECTOR" --url "$PR_URL" 2>&1)" || true
+SELECTOR_VERDICT="$(jq -er '.verdict | strings' <<<"$SELECTOR_RESULT" 2>/dev/null)" || SELECTOR_VERDICT="NEEDS_HUMAN"
+SELECTOR_VALID="$(jq -e '
+  (.snapshot | type == "object") and
+  (.snapshot.head.repo | type == "string") and
+  (.snapshot.head.ref | type == "string") and
+  (.snapshot.head.sha | type == "string" and test("^[0-9a-fA-F]{40}$")) and
+  (.snapshot.base.repo | type == "string") and
+  (.snapshot.base.ref | type == "string") and
+  (.snapshot.base.sha == null or (.snapshot.base.sha | type == "string" and test("^[0-9a-fA-F]{40}$"))) and
+  (.snapshot.state | . == "open" or . == "closed" or . == "merged") and
+  (.selected | (type == "array" and all(.[]; (.id | type == "string") and (.sha | type == "string" and test("^[0-9a-fA-F]{40}$"))))) and
+  (.open_spec_ids | type == "array")
+' <<<"$SELECTOR_RESULT" 2>/dev/null)" || SELECTOR_VALID="false"
+case "$SELECTOR_VERDICT:$SELECTOR_VALID" in
+  PASS:false|BLOCKED:false) SELECTOR_VERDICT="NEEDS_HUMAN" ;;
+esac
+LAND_SNAPSHOT="$(jq -c '.snapshot // empty' <<<"$SELECTOR_RESULT" 2>/dev/null)"
+LAND_SELECTED="$(jq -c '.selected' <<<"$SELECTOR_RESULT" 2>/dev/null)"
+```
+
+`PASS` continues with the snapshot and selected records. `BLOCKED` stops with every
+`open_spec_ids` entry. `NEEDS_HUMAN` reports the reason; `RESOLVING` returns to the caller to
+resume against the current PR. Invalid JSON or missing fields on `PASS` / `BLOCKED` are
+`NEEDS_HUMAN`, never an empty selection. Require a snapshot object, selected array, string IDs,
+full blob SHAs, and an `open_spec_ids` array. The snapshot's head SHA/ref/repository, base
+ref/repository, and normalized PR state must match the initial PR read; a mismatch is `RESOLVING`.
+Use that full head SHA for checks and `FLOW_HEAD_SHA`, and selected IDs for `FLOW_SPEC_ID` /
+`FLOW_SPEC_IDS`.
+
+The selector reads the head from the PR's head repository, including forks. It tries one recursive
+tree read; if truncated, it discards that result and reads complete `.flow` subtrees by object ID
+without a recursive parameter. It preserves branch-name priority, multiple matches, task path and
+OID comparison, and closed-spec rules. A required read failure is `NEEDS_HUMAN`; established
+absence of specs continues through the other gates. Selected records carry their head blob SHA.
+After merge, if tracker sync is active, fetch each selected blob by that SHA from the same head
+repository and pass it to the tracker touchpoint. A failure there retains `MERGED`.
+
+Keep the selector's `snapshot` for this invocation. After a repair or catch-up, rerun the selector
+and all gates against its returned snapshot. Immediately before merge, rerun it with
+`--expected-snapshot "$LAND_SNAPSHOT"`. If it returns `RESOLVING`, do not merge or reuse prior
+gate results; resume land against the current PR. A moved ref never silently substitutes a
+different commit into the current selection. This expected-snapshot read checks the PR and any
+compared base ref without rereading trees or blobs. Require `PASS` with `unchanged: true` and keep
+the previous selected IDs and blob SHAs; any other result stops safely.
 
 ## Resolve conflicts, threads, then CI
 
@@ -109,6 +146,8 @@ changing its checkout; the command must judge the supplied remote head.
 Any non-zero exit stops `NEEDS_HUMAN`: a missing, unexecutable, or timed-out
 command is a refusal too. Include exit/error evidence. Do not rerun it after
 a head race in this invocation; re-read and return `RESOLVING` for fresh gating.
+Immediately before the command, rerun the selector with
+`--expected-snapshot "$LAND_SNAPSHOT"`; anything other than `PASS` stops without running it.
 
 ## Merge one layer
 
@@ -121,7 +160,9 @@ If the authorized PR is draft and flow authorized the merge without a human's in
 authorization, stop `NEEDS_HUMAN` naming its open items: the draft marks a call the run left for a
 person. With a human's current authorization, mark it ready with `gh pr ready <PR> --repo <owner/repo>`
 and re-read checks and review state before proceeding. Refresh the full head SHA and all gates
-immediately before merge. A shortened SHA is invalid. Ordinary PRs use
+immediately before merge, including the selector with
+`--expected-snapshot "$LAND_SNAPSHOT"`. A changed or unreadable selector result stops without
+merging. A shortened SHA is invalid. Ordinary PRs use
 `gh pr merge <PR> --repo <owner/repo> --squash --match-head-commit <full-head-sha>`, adding
 `--delete-branch` only after a successful fresh read proves no open PR targets the branch; `--repo`
 keeps local branches safe. After either merge call, re-read the exact PR: only `MERGED` with a merge
