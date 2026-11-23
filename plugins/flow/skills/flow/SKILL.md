@@ -1,6 +1,6 @@
 ---
 name: flow
-description: Use for any request to build, change, fix, refactor, speed up, prototype, review, open or land a PR, resolve PR feedback, continue work in progress, answer how/why questions or diff safety, link a tracker issue, prime a repo, check setup, or run unattended (--auto, --from-issue).
+description: Use for every development request, however small, to build, change, fix, refactor, speed up, prototype, review, open or land a PR, resolve PR feedback, continue work in progress, answer how/why questions or diff safety, link a tracker issue, prime a repo, check setup, or run unattended (--auto, --from-issue).
 ---
 
 # Flow
