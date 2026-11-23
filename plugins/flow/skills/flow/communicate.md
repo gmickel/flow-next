@@ -8,7 +8,7 @@ Lead with the conclusion or outcome, then give the mechanism, path, or number th
 
 Write short paragraphs in active voice with a named actor. State what something is rather than contrasting what it is not, unless you are correcting a likely misreading. Do not repeat the heading in the opening sentence or restate the question before answering it. Use plain words ("use" over "utilize", "to" over "in order to"), define domain terms at first use, and drop filler and hedging beyond real uncertainty.
 
-Be plain about limits and gaps: state what was not verified, where you looked, and what could not be read. Never soften a failure or missing check. When a surface requires an exact heading, bullet prefix, or marker, that contract overrides prose style.
+Be plain about limits and gaps: state what was not verified, where you looked, and what could not be read, and never soften a failure or missing check. Mark each claim as measured (run and observed), inferred (from what was read), or a guess, and never hand the person a check the session could have run itself. When a surface requires an exact heading, bullet prefix, or marker, that contract overrides prose style.
 
 ## Visual shapes
 
