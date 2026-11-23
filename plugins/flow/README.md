@@ -20,7 +20,7 @@ Flow works without repository setup, and adding one line to `CLAUDE.md` or `AGEN
 
 The `prime` playbook offers to add it. It is one stable sentence and never needs changing.
 
-Separately and optionally, write model and effort preferences in the same file in plain words—for example, "Build with a faster model and review with another vendor's strongest" or "Review on another model family; budget: medium" (`large`, `medium`, or `small`). The plugin reads them and never writes them.
+Separately and optionally, write model and effort preferences in the same file in plain words—for example, "Review with another vendor's model at medium effort" or "Build with a faster model; review on another model family; budget: medium" (`large`, `medium`, or `small`). The plugin reads them and never writes them.
 
 ## If Flow is not being picked up
 
