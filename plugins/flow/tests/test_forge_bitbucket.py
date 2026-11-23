@@ -48,7 +48,9 @@ class BktCli(FakeCli):
 
     def __init__(self, origin=ORIGIN, bkt=(), contexts="context-list", **kwargs):
         super().__init__(origin, **kwargs)
-        self.bkt = {tuple(fx["argv"]): fx for fx in bkt}
+        self.bkt: dict[tuple, list[dict]] = {}
+        for fx in bkt:
+            self.bkt.setdefault(tuple(fx["argv"]), []).append(fx)
         self.contexts = contexts
 
     def __call__(self, argv, *args, **kwargs):
@@ -58,7 +60,11 @@ class BktCli(FakeCli):
         self.calls.append(argv)
         if self.contexts == "missing":
             raise FileNotFoundError("bkt")
-        fx = fixture(self.contexts) if argv[1:] == ["context", "list", "--json"] else self.bkt.get(tuple(argv))
+        if argv[1:] == ["context", "list", "--json"]:
+            fx = fixture(self.contexts)
+        else:
+            queue = self.bkt.get(tuple(argv))
+            fx = (queue.pop(0) if len(queue) > 1 else queue[0]) if queue else None
         if fx is None:
             raise AssertionError(f"no recorded bkt answer for {argv}")
         return subprocess.CompletedProcess(argv, fx["returncode"], fx["stdout"], fx["stderr"])

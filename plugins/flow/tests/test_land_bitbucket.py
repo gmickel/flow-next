@@ -152,5 +152,105 @@ class BitbucketMergeEvidenceTests(ForgeTestCase):
                 self.assertEqual(got, want)
 
 
+class BitbucketWaitAndMergeTests(ForgeTestCase):
+    def _clock(self):
+        from test_forge import _FakeClock
+        return _FakeClock()
+
+    def test_wait_ready_changes_requested_conflict_and_merged(self):
+        clock = self._clock()
+        fake = BktCli(bkt=[fixture("land-pr-approved-fields"), fixture("land-commit-ready"),
+                           statuses_of("land-statuses-successful", READY), fixture("land-checks-clean")])
+        got = self.run_with(fake, lambda: f.forge_wait(
+            self.repo, 10, timeout_s=60, interval_s=10, monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual((got["state"], got["head_sha"], clock.sleeps), ("ready", READY, []))
+
+        s_ok = {**statuses_of("land-statuses-successful", CHANGES),
+                "stdout": fixture("land-statuses-successful")["stdout"].replace(READY, CHANGES)}
+        fake_cr = BktCli(bkt=[fixture("land-pr-changes-requested-fields"), fixture("land-commit-changes"),
+                              s_ok, fixture("land-checks-changes")])
+        got_cr = self.run_with(fake_cr, lambda: f.forge_wait(
+            self.repo, 11, timeout_s=60, interval_s=10, monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got_cr["state"], "changes_requested")
+
+        conflict = {**fixture("land-checks-conflict"), "argv": fixture("land-checks-clean")["argv"]}
+        fake_cf = BktCli(bkt=[fixture("land-pr-approved-fields"), fixture("land-commit-ready"),
+                              statuses_of("land-statuses-successful", READY), conflict])
+        self.assertEqual(self.run_with(fake_cf, lambda: f.forge_wait(
+            self.repo, 10, timeout_s=60, interval_s=10, monotonic=clock.monotonic, sleep=clock.sleep))["state"], "blocked")
+
+        merged_pr = {**fixture("land-pr-race-merged"),
+                     "argv": api(f"{REPO}/pullrequests/12?fields=%2Bdestination.branch.merge_strategies")}
+        fake_m = BktCli(bkt=[merged_pr])
+        got_m = self.run_with(fake_m, lambda: f.forge_wait(
+            self.repo, 12, timeout_s=60, interval_s=10, monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got_m["state"], "merged")
+
+    def test_wait_failed_check_returns_at_once(self):
+        clock = self._clock()
+        fake = BktCli(bkt=[fixture("land-pr-changes-requested-fields"), fixture("land-commit-changes"),
+                           statuses_of("land-statuses-failed", CHANGES), fixture("land-checks-changes")])
+        got = self.run_with(fake, lambda: f.forge_wait(
+            self.repo, 11, timeout_s=120, interval_s=15, monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got["state"], "failing")
+        self.assertEqual(got["failing_checks"], ["fixture lint"])
+        self.assertEqual(clock.sleeps, [])
+
+    def test_wait_running_build_honours_deadline(self):
+        clock = self._clock()
+        fake = BktCli(bkt=[fixture("land-pr-approved-fields"), fixture("land-commit-ready"),
+                           statuses_of("land-statuses-inprogress", READY), fixture("land-checks-clean")])
+        got = self.run_with(fake, lambda: f.forge_wait(
+            self.repo, 10, timeout_s=20, interval_s=10, monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got["state"], "pending")
+        self.assertEqual(got["running_checks"], ["fixture CI"])
+        self.assertIn("deadline reached", got["reason"])
+        self.assertEqual(clock.sleeps, [10.0, 10.0])
+
+    def test_merge_succeeds_and_detects_race_window(self):
+        merge_post_10 = {
+            **fixture("land-merge-race"),
+            "argv": ["bkt", "--context", "flownextnew", "api", f"{REPO}/pullrequests/10/merge",
+                     "-X", "POST", "-d", '{"merge_strategy":"squash","close_source_branch":true}'],
+        }
+        def _merged_10(pr):
+            pr["source"]["commit"]["hash"] = READY[:12]
+            pr["merge_commit"]["hash"] = "999999999999"
+
+        after_10 = derived("land-pr-race-merged", _merged_10, argv=api(f"{REPO}/pullrequests/10"))
+        fake = BktCli(bkt=[fixture("land-pr-ready"), fixture("land-commit-ready"), merge_post_10, after_10])
+        got = self.run_with(fake, lambda: f.forge_merge(self.repo, 10, READY))
+        self.assertEqual(got, {"merged": True, "merge_commit": "999999999999",
+                               "reason": "merged", "message": "squash merged"})
+
+        # Race during POST: pre-check saw JUDGED head, post-merge read reveals Bitbucket merged MERGED_HEAD.
+        judged_full = "dd1a7864bc42b0a2be253a461e3067cf58e848a5"
+
+        def _before_12(pr):
+            pr["id"] = 12
+            pr["source"]["commit"]["hash"] = JUDGED
+
+        before_12 = derived("land-pr-ready", _before_12, argv=api(f"{REPO}/pullrequests/12"))
+        commit_judged = derived("land-commit-ready", lambda c: c.update(hash=judged_full),
+                                argv=api(f"{REPO}/commit/{JUDGED}"))
+        merge_post_12 = {
+            **fixture("land-merge-race"),
+            "argv": ["bkt", "--context", "flownextnew", "api", f"{REPO}/pullrequests/12/merge",
+                     "-X", "POST", "-d", '{"merge_strategy":"squash","close_source_branch":true}'],
+        }
+        fake_race = BktCli(bkt=[before_12, commit_judged, merge_post_12, fixture("land-pr-race-merged")])
+        got_race = self.run_with(fake_race, lambda: f.forge_merge(self.repo, 12, judged_full))
+        self.assertEqual((got_race["merged"], got_race["reason"], got_race["merge_commit"]),
+                         (True, "merged_head_moved", "46b4f5f81b9b"))
+        self.assertIn(JUDGED, got_race["message"])
+        self.assertIn(MERGED_HEAD[:12], got_race["message"])
+
+    def test_merge_refuses_moved_head_before_post(self):
+        fake = BktCli(bkt=[fixture("land-pr-ready"), fixture("land-commit-ready")])
+        got = self.run_with(fake, lambda: f.forge_merge(self.repo, 10, "e" * 40))
+        self.assertEqual((got["merged"], got["reason"]), (False, "head_moved"))
+        self.assertFalse(any("merge" in " ".join(c) for c in fake.calls))
+
+
 if __name__ == "__main__":
     unittest.main()

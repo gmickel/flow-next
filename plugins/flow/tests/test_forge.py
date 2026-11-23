@@ -37,10 +37,10 @@ class FakeCli:
     """subprocess.run stand-in: recorded glab, scripted origin / ssh / gh login, real git otherwise."""
 
     def __init__(self, origin=None, glab=(), gh_hosts=(), glab_hosts=("localhost:8929",),
-                 ssh=None, glab_auth=None):
+                 ssh=None, glab_auth=None, gh=None):
         self.origin, self.gh_hosts, self.glab_hosts = origin, set(gh_hosts), set(glab_hosts)
         self.recorded = {tuple(fx["argv"]): fx for fx in glab}
-        self.ssh, self.glab_auth, self.calls = ssh or {}, glab_auth, []
+        self.ssh, self.glab_auth, self.gh, self.calls = ssh or {}, glab_auth, gh, []
 
     def __call__(self, argv, *args, **kwargs):
         argv = list(argv)
@@ -57,6 +57,9 @@ class FakeCli:
             return done(0, f"user git\nhostname {self.ssh.get(argv[2], argv[2])}\nport 22\n")
         if argv[:3] == ["gh", "auth", "token"]:
             return done(0 if argv[4] in self.gh_hosts else 1)
+        if argv[0] == "gh" and self.gh is not None:
+            ans = self.gh(argv) if callable(self.gh) else self.gh.pop(0)
+            return done(*ans)
         if argv[:3] == ["glab", "auth", "status"]:
             if self.glab_auth == "timeout":
                 raise subprocess.TimeoutExpired(argv, kwargs.get("timeout"))
@@ -360,6 +363,184 @@ class GitLabMergeEvidenceTests(ForgeTestCase):
                 with patch.object(f, "get_repo_root", return_value=self.repo):
                     got = self.run_with(fake, lambda b=branch: policy.merge_evidence({}, {"branch_name": b}, None))
                 self.assertEqual(got, want)
+
+
+class _FakeClock:
+    def __init__(self):
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+class GitHubWaitAndMergeTests(ForgeTestCase):
+    ORIGIN = "https://github.com/o/r.git"
+    HEAD = "a" * 40
+    MERGE_SHA = "b" * 40
+
+    @classmethod
+    def _view(cls, **overrides) -> str:
+        base = {
+            "state": "OPEN", "headRefOid": cls.HEAD, "mergeable": "MERGEABLE",
+            "mergeStateStatus": "CLEAN", "reviewDecision": "APPROVED", "isDraft": False,
+            "statusCheckRollup": [{"name": "ci", "status": "COMPLETED", "conclusion": "SUCCESS"}],
+            "mergeCommit": None,
+        }
+        base.update(overrides)
+        return json.dumps(base)
+
+    def test_wait_ready_and_terminal_states(self):
+        cases = [
+            ("ready", {}, "ready"),
+            ("changes requested", {"reviewDecision": "CHANGES_REQUESTED"}, "changes_requested"),
+            ("review required", {"reviewDecision": "REVIEW_REQUIRED"}, "review_required"),
+            ("conflict", {"mergeable": "CONFLICTING", "mergeStateStatus": "DIRTY"}, "blocked"),
+            ("draft", {"isDraft": True}, "blocked"),
+            ("merged", {"state": "MERGED", "mergeCommit": {"oid": self.MERGE_SHA}}, "merged"),
+            ("closed", {"state": "CLOSED"}, "closed"),
+        ]
+        for name, overrides, want in cases:
+            with self.subTest(name):
+                clock = _FakeClock()
+                fake = FakeCli(self.ORIGIN, gh=[(0, self._view(**overrides), "")])
+                got = self.run_with(fake, lambda: f.forge_wait(
+                    self.repo, 42, timeout_s=60, interval_s=10,
+                    monotonic=clock.monotonic, sleep=clock.sleep))
+                self.assertEqual(got["state"], want)
+                self.assertEqual(got["head_sha"], self.HEAD)
+                self.assertEqual(clock.sleeps, [])
+
+    def test_wait_failed_check_returns_at_once(self):
+        clock = _FakeClock()
+        rollup = [
+            {"name": "lint", "status": "COMPLETED", "conclusion": "FAILURE"},
+            {"name": "e2e", "status": "IN_PROGRESS", "conclusion": ""},
+        ]
+        fake = FakeCli(self.ORIGIN, gh=[(0, self._view(statusCheckRollup=rollup), "")])
+        got = self.run_with(fake, lambda: f.forge_wait(
+            self.repo, 42, timeout_s=120, interval_s=15,
+            monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got["state"], "failing")
+        self.assertEqual(got["failing_checks"], ["lint"])
+        self.assertEqual(got["running_checks"], ["e2e"])
+        self.assertEqual(clock.sleeps, [])
+
+    def test_wait_polls_and_honours_deadline_without_sleeping(self):
+        running = self._view(statusCheckRollup=[{"name": "ci", "status": "IN_PROGRESS", "conclusion": ""}])
+        clock = _FakeClock()
+        fake = FakeCli(self.ORIGIN, gh=[(0, running, ""), (0, self._view(), "")])
+        got = self.run_with(fake, lambda: f.forge_wait(
+            self.repo, 42, timeout_s=60, interval_s=15,
+            monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got["state"], "ready")
+        self.assertEqual(clock.sleeps, [15.0])
+
+        clock2 = _FakeClock()
+        fake2 = FakeCli(self.ORIGIN, gh=lambda argv: (0, running, ""))
+        got2 = self.run_with(fake2, lambda: f.forge_wait(
+            self.repo, 42, timeout_s=25, interval_s=10,
+            monotonic=clock2.monotonic, sleep=clock2.sleep))
+        self.assertEqual(got2["state"], "pending")
+        self.assertEqual(got2["running_checks"], ["ci"])
+        self.assertIn("deadline reached", got2["reason"])
+        self.assertEqual(clock2.sleeps, [10.0, 10.0, 5.0])
+
+    def test_merge_succeeds_and_confirms_commit(self):
+        after = json.dumps({"state": "MERGED", "headRefOid": self.HEAD,
+                            "mergeCommit": {"oid": self.MERGE_SHA}, "mergeQueueEntry": None})
+        fake = FakeCli(self.ORIGIN, gh=[(0, "", ""), (0, after, "")])
+        got = self.run_with(fake, lambda: f.forge_merge(self.repo, 42, self.HEAD))
+        self.assertEqual(got, {"merged": True, "merge_commit": self.MERGE_SHA,
+                               "reason": "merged", "message": "squash merged"})
+        self.assertIn(["gh", "pr", "merge", "42", "--repo", "o/r", "--squash",
+                       "--match-head-commit", self.HEAD], fake.calls)
+
+    def test_merge_refuses_moved_head_short_sha_and_reports_queued(self):
+        short = f.forge_merge(self.repo, 42, self.HEAD[:12])
+        self.assertEqual((short["merged"], short["reason"]), (False, "invalid_head"))
+
+        moved_view = json.dumps({"state": "OPEN", "headRefOid": "c" * 40,
+                                 "mergeCommit": None, "mergeQueueEntry": None})
+        fake = FakeCli(self.ORIGIN, gh=[(1, "", "Head branch was modified"), (0, moved_view, "")])
+        got = self.run_with(fake, lambda: f.forge_merge(self.repo, 42, self.HEAD))
+        self.assertEqual((got["merged"], got["reason"]), (False, "head_moved"))
+
+        queued_view = json.dumps({"state": "OPEN", "headRefOid": self.HEAD,
+                                  "mergeCommit": None, "mergeQueueEntry": {"position": 1}})
+        fake_q = FakeCli(self.ORIGIN, gh=[(0, "", ""), (0, queued_view, "")])
+        got_q = self.run_with(fake_q, lambda: f.forge_merge(self.repo, 42, self.HEAD))
+        self.assertEqual((got_q["merged"], got_q["reason"]), (False, "queued"))
+
+
+class GitLabWaitAndMergeTests(ForgeTestCase):
+    HEAD = "d8b76161301680f873478db85eff419251735916"
+    MERGE_SHA = "79b0bb356d6d477669ca7ec5466368cf0b588663"
+
+    def test_wait_ready_review_required_and_merged(self):
+        clock = _FakeClock()
+        fake = FakeCli(GITLAB_ORIGIN, glab=[fixture("mr-readiness-green"), fixture("project-squash-default")])
+        got = self.run_with(fake, lambda: f.forge_wait(
+            self.repo, 14, timeout_s=60, interval_s=10, monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual((got["state"], got["head_sha"], clock.sleeps), ("ready", self.HEAD, []))
+
+        fake_rev = FakeCli(GITLAB_ORIGIN, glab=[fixture("mr-readiness-not-approved"), fixture("project-squash-default")])
+        got_rev = self.run_with(fake_rev, lambda: f.forge_wait(
+            self.repo, 14, timeout_s=60, interval_s=10, monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got_rev["state"], "review_required")
+
+        fake_m = FakeCli(GITLAB_ORIGIN, glab=[as_read("land-mr-merged", "/merge_requests/14")])
+        got_m = self.run_with(fake_m, lambda: f.forge_wait(
+            self.repo, 14, timeout_s=60, interval_s=10, monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got_m["state"], "merged")
+        self.assertIn(self.MERGE_SHA, got_m["reason"])
+
+    def test_wait_failed_pipeline_returns_at_once_with_failed_jobs(self):
+        clock = _FakeClock()
+        fake = FakeCli(GITLAB_ORIGIN, glab=[
+            fixture("mr-readiness-failed"), fixture("project-squash-default"),
+            as_read("land-failed-jobs", "/pipelines/16/jobs?scope=failed"),
+        ])
+        got = self.run_with(fake, lambda: f.forge_wait(
+            self.repo, 15, timeout_s=120, interval_s=15, monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got["state"], "failing")
+        self.assertEqual(got["failing_checks"], ["fail"])
+        self.assertEqual(clock.sleeps, [])
+
+    def test_wait_running_pipeline_honours_deadline(self):
+        clock = _FakeClock()
+        fake = FakeCli(GITLAB_ORIGIN, glab=[fixture("mr-readiness-running"), fixture("project-squash-default")])
+        got = self.run_with(fake, lambda: f.forge_wait(
+            self.repo, 17, timeout_s=20, interval_s=10, monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got["state"], "pending")
+        self.assertEqual(got["running_checks"], ["pipeline (running)"])
+        self.assertIn("deadline reached", got["reason"])
+        self.assertEqual(clock.sleeps, [10.0, 10.0])
+
+    def test_merge_succeeds_and_refuses_moved_head_409(self):
+        merge_ok = {**fixture("land-merge"), "env": {"GITLAB_HOST": "localhost:8929"}}
+        merge_ok["argv"] = [
+            "glab", "api", "-X", "PUT", "projects/flownext%2Fflownext/merge_requests/14/merge",
+            "-F", "squash=true", "-F", "should_remove_source_branch=true", "-f", f"sha={self.HEAD}",
+        ]
+        fake = FakeCli(GITLAB_ORIGIN, glab=[merge_ok, as_read("land-mr-merged", "/merge_requests/14")])
+        got = self.run_with(fake, lambda: f.forge_merge(self.repo, 14, self.HEAD))
+        self.assertEqual(got, {"merged": True, "merge_commit": self.MERGE_SHA,
+                               "reason": "merged", "message": "squash merged"})
+
+        stale = "fb633aff58843b154b078ff30eb6cc6df040deeb"
+        moved = {**fixture("land-merge-moved-head"), "env": {"GITLAB_HOST": "localhost:8929"}}
+        moved["argv"] = [
+            "glab", "api", "-X", "PUT", "projects/flownext%2Fflownext/merge_requests/14/merge",
+            "-F", "squash=true", "-F", "should_remove_source_branch=true", "-f", f"sha={stale}",
+        ]
+        fake_moved = FakeCli(GITLAB_ORIGIN, glab=[moved])
+        got_moved = self.run_with(fake_moved, lambda: f.forge_merge(self.repo, 14, stale))
+        self.assertEqual((got_moved["merged"], got_moved["reason"]), (False, "head_moved"))
 
 
 if __name__ == "__main__":
