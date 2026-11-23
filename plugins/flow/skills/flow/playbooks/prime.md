@@ -25,6 +25,8 @@ Inside one repo, fill gaps using outcome defaults and stack-fitting tools withou
 
 `Use the Flow skill for development work in this repository.`
 
+Check every statement the instruction file makes about how the code behaves against the code before writing it. Carry nothing over from older documents unchecked.
+
 Leave a verified run-and-prove page, a short instruction file, the legacy zones, and a plain list of anything you could not make work (often sign-in) with what you tried and its output. Re-running prime re-runs the run-and-prove page.
 
 Across several repos, analyse and recommend without building anything. Report what fits—one repo holding map, priming, and specs; a context repo beside code; or per-repo priming with a sibling list—and how each fails; the team decides.
