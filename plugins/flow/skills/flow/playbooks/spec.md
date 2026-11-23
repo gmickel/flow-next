@@ -2,7 +2,7 @@
 
 ## Writing
 
-Before writing under `.flow/specs/`, check existing specs across branches with one git command and compare matches by reading. Use `templates/spec.md` beside the router unless the repo has a root `SPEC.md`, which wins. Read `STRATEGY.md` when present and turn any conflict with its direction into an open question.
+Before writing under `.flow/specs/`, check existing specs across branches with one git command and compare matches by reading. Use `templates/spec.md` beside the router unless the repo has a root `SPEC.md`, which wins. Read `STRATEGY.md` and any repo glossary (whatever its name) when present, turning any conflict with direction or terms into an open question. When a term is first settled with no glossary, offer to create a root `GLOSSARY.md` holding that one term—only on first need with the person's yes. Read existing decision files and record new decisions in the repo's form; otherwise `## Decision Context` is the record, and do not create a decisions directory.
 
 When intent cannot yet be stated as criteria, draft the spec with its open questions as the decisions and settle those first. Split only by independently shippable outcome, not by size. Tag any requirement the person did not state as `[inferred]`, and keep requirement IDs append-only: a changed requirement gets a new ID.
 
