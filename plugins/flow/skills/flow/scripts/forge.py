@@ -726,6 +726,13 @@ def _confirm_merge(probe: Any, *, sleep: Any = None) -> dict:
     return _merge_row(False, "unconfirmed", f"{msg}: {last_err}" if last_err else msg)
 
 
+_GH_QUEUED_MARKERS = (
+    "added to the merge queue",
+    "is set by the merge queue",
+    "already queued to merge",
+)
+
+
 def _github_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str, *,
                   sleep: Any = None) -> dict:
     proc, err = _run_forge_cmd(
@@ -733,16 +740,18 @@ def _github_merge(repo: Path, origin: "ForgeOrigin", number: int, head: str, *,
         cwd=repo, timeout=_FORGE_MERGE_TIMEOUT_S)
     if proc is None:
         return _merge_row(False, "error", err)
+    merge_out = f"{proc.stdout or ''}\n{proc.stderr or ''}".lower()
+    queued_out = proc.returncode == 0 and any(m in merge_out for m in _GH_QUEUED_MARKERS)
 
     def probe() -> tuple[Optional[dict], str]:
-        after, view_err = _github_pr_view(repo, origin, number, "state,headRefOid,mergeCommit,mergeQueueEntry")
+        after, view_err = _github_pr_view(repo, origin, number, "state,headRefOid,mergeCommit")
         if after is not None:
             if str(after.get("state") or "").upper() == "MERGED" and _field(after, "mergeCommit", "oid"):
                 return _merge_row(True, "merged", "squash merged", merge_commit=after["mergeCommit"]["oid"]), ""
-            if after.get("mergeQueueEntry") is not None:
-                return _merge_row(False, "queued", "added to merge queue"), ""
             if isinstance(after.get("headRefOid"), str) and after["headRefOid"] != head:
                 return _merge_row(False, "head_moved", f"head moved to {after['headRefOid']}"), ""
+        if queued_out:
+            return _merge_row(False, "queued", "added to merge queue"), ""
         return None, view_err
 
     if proc.returncode != 0:
