@@ -13,7 +13,7 @@ Make one repository ready for agentic work. Prove each outcome by doing it rathe
 
 ## Order and bounds
 
-Ask first, in one batch and before any proof runs: the legacy and frozen areas, where specs go, and whether to add the Flow sentence. A quick read of the repo is enough to ask them, and the person can answer while the proofs run. If the checkout is behind its remote, say so in that batch and ask whether to update it.
+Ask first, in one batch and before any proof runs: the legacy and frozen areas, where specs go, and whether to add the Flow sentence. Spend a minute or two reading first, so the legacy question offers specific candidates with their evidence (files for older tools, a superseded setup, paths untouched for a long time, checks that only run by hand) and the person confirms instead of recalling; then the person can answer while the proofs run. If the checkout is behind its remote, say so in that batch and ask whether to update it.
 
 Leave the checkout as found: never pull, fast-forward, or switch the person's branch unasked. New files go on a new branch, uncommitted until the person says.
 
