@@ -16,7 +16,7 @@ Wait through `edge forge wait`; do not poll by hand. On a forge with no required
 - `review_required`, `blocked`, or `error`: stop and report the reason.
 - `pending`: while checks are still running, wait again up to a total bound of about 30 minutes unless the person or invocation set another. When that bound is reached, stop and report what is still running; an unattended run ends as `BLOCKED`, safe to run again.
 - `merged`: skip merging and run only after-merge steps.
-- `closed`: stop and report closed unmerged.
+- `closed`: remove any worktree this work created, then stop and report closed unmerged.
 
 ## Merging (`edge forge merge <number> --head <sha>`)
 

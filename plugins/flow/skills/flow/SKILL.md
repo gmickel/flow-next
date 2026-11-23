@@ -8,7 +8,7 @@ description: Use for every development request, however small, to build, change,
 Route on intent, not phrasing. Choose **ceremony** and **kind** independently, and read every applicable file under `playbooks/` beside this file in full before acting.
 
 - **Direct change:** small, local, reversible work with a known check goes on its own branch with no spec and is handed back. Review it and open a PR when asked, or when stopping at PR or merged.
-- **Spec (`spec`):** new behaviour, multi-area or multi-person work, briefs, substantive issues, unclear criteria, or risk (shared state, concurrency, auth, money, data layout). On an existing spec, take open questions to their role owner; build once settled.
+- **Spec (`spec`):** new behaviour, multi-area or multi-person work, briefs, tracker issues (a few lines when small), unclear criteria, or risk (shared state, concurrency, auth, money, data layout). On an existing spec, take open questions to their role owner; build once settled.
 - **Goal (`goal`):** multi-PR outcomes, attended or `--auto`.
 
 Spec and goal work runs spec (including its build part), review, and PR, reading each playbook in turn; attended runs stop at the open PR unless asked otherwise.
