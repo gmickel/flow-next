@@ -1,6 +1,6 @@
 # Prime
 
-Make one repository ready for agentic work. Prove each outcome by doing it rather than checking whether files exist; never emit scores, pillars, or maturity levels.
+Make one repository ready for agentic work. Prove each outcome by doing it rather than checking whether files exist; prime gives no score or grade.
 
 ## Outcomes
 
