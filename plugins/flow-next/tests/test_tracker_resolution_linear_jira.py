@@ -170,18 +170,13 @@ class LinearStates(unittest.TestCase):
 
 
 class LinearDestination(unittest.TestCase):
-    def test_labels_are_lowercased_and_drained(self) -> None:
+    def test_destination_returns_empty_label_ids_without_fetching_labels(self) -> None:
         team = ok({"data": {"team": {"id": "team-uuid-1", "key": "FLOW"}}})
-        lbl1 = ok({"data": {"team": {"labels": {
-            "nodes": [{"id": "l1", "name": "Bug"}],
-            "pageInfo": {"hasNextPage": True, "endCursor": "c1"}}}}})
-        lbl2 = ok({"data": {"team": {"labels": {
-            "nodes": [{"id": "l2", "name": "Feature"}],
-            "pageInfo": {"hasNextPage": False, "endCursor": None}}}}})
-        ex = fake_execute({"resolve-destination": team, "resolve-labels": [lbl1, lbl2]})
+        ex = fake_execute({"resolve-destination": team})
         out = LN.resolve_destination(linear_cfg(), ex)
         self.assertEqual(out, {"teamId": "team-uuid-1", "teamKey": "FLOW",
-                               "labelIds": {"bug": "l1", "feature": "l2"}})
+                               "labelIds": {}})
+        self.assertEqual([c.op for c in ex.calls], ["resolve-destination"])
 
     def test_missing_team_id_is_unresolved(self) -> None:
         out = LN.resolve_destination({"tracker": {"perTracker": {}}}, fake_execute({}))
@@ -353,8 +348,6 @@ class ResolveVerb(unittest.TestCase):
         return {
             "resolve-destination": ok({"data": {"team": {"id": "team-uuid-1",
                                                          "key": "FLOW"}}}),
-            "resolve-labels": ok({"data": {"team": {"labels": {
-                "nodes": [], "pageInfo": {"hasNextPage": False, "endCursor": None}}}}}),
             "resolve-states": linear_states(SIMPLE_STATES),
         }
 
@@ -370,6 +363,7 @@ class ResolveVerb(unittest.TestCase):
         self.assertEqual(code, 0, payload)
         data = json.loads(payload)["data"]["resolved"]
         self.assertEqual(data["destination"]["teamKey"], "FLOW")
+        self.assertEqual(data["destination"]["labelIds"], {})
         self.assertEqual(data["destination"]["stateIds"]["in_progress"], "s-prog")
         self.assertTrue(data["capabilities"]["blockedBy"])
         self.assertIsNotNone(data["resolvedAt"])

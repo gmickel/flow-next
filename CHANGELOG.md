@@ -4,6 +4,12 @@ All notable changes to the flow-next.
 
 Flow-Next changed shape with 5.0.0. One command, `/flow-next:flow`, reads whatever you have and picks the route, and `flow --auto` runs the same route unattended. If you are arriving from 4.x, start with [the 5.0.0 entry](#flow-next-500---2026-09-12) and [the flow skill](plugins/flow-next/skills/flow-next-flow/SKILL.md) before reading the items below.
 
+## Unreleased
+
+### Fixed
+
+- **Linking a Linear team no longer copies its label list into `.flow/config.json`.** `flowctl tracker resolve` stored every label the team could see under `tracker.resolved.destination.labelIds`. Linear returns workspace-wide labels for a team, so label names from unrelated projects ended up in a committed file. The list now starts empty, and a label is looked up on the team the first time it is needed, as it already was for labels missing from the list. A repository linked before this release keeps its stored list until the link is resolved again: run `flowctl tracker resolve --refresh` and commit the smaller config.
+
 ## [flow-next 9.20.0] - 2026-11-22
 
 Agents spend less of their context window on flow-next's own instructions and wait less on its tooling. The CLI guide an agent reads before most flowctl work shrinks from 17.8 KB to 4.2 KB, because the multi-CLI bridge and model-steering recipes now load only when an agent is about to hand work to another CLI or pick a model. The dependency view gets every spec's dependencies in one call instead of one call per open spec. The shipped skills, agents and commands are 37,641 bytes smaller (1.8%), mostly from 11 duplicate files removed. CLI help prints from its static fast path on Python 3.11 through 3.13 as well as 3.14 (28 ms median over three runs), and PR delivery and review-feedback resolution make fewer GitHub round-trips.
