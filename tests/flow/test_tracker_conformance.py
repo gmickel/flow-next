@@ -885,7 +885,7 @@ class SpecVerbCreateAllFour(unittest.TestCase):
             with self.subTest(provider=provider), \
                     tempfile.TemporaryDirectory() as tmp:
                 flow = Path(tmp) / ".flow"
-                path = _write_flow(flow, cfg_fn(), tracker=_unlinked())
+                _write_flow(flow, cfg_fn(), tracker=_unlinked())
                 parent_resp = next(
                     case[4] for case in PROVIDERS if case[0] == provider)
                 ex = fake_execute({
@@ -941,7 +941,7 @@ class SpecVerbPersistExternalAllFour(unittest.TestCase):
     def test_linear_happy_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(flow, ln_cfg(), tracker=_unlinked())
+            _write_flow(flow, ln_cfg(), tracker=_unlinked())
             ex = fake_execute({"lifecycle-resolve-uuid": ok({
                 "data": {"issue": {
                     "id": LN_UUID, "identifier": "WOR-17",
@@ -1563,7 +1563,7 @@ class JiraDcCustomKey(unittest.TestCase):
     def test_lifecycle_create_persists_dc_key(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp)
-            path = _write_flow(flow, jr_cfg(project_key=DC_PROJECT), tracker={
+            _write_flow(flow, jr_cfg(project_key=DC_PROJECT), tracker={
                 "id": None, "identifier": None, "url": None,
                 "lastSyncedAt": None, "depRelations": [],
                 "linkState": "unlinked",

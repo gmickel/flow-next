@@ -11,10 +11,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
-from flowctl_test_support import FLOWCTL_CMD
 
 TESTS = Path(__file__).resolve().parent
 SCRIPTS = TESTS.parents[1] / "plugins" / "flow" / "skills" / "flow" / "scripts"
@@ -411,9 +409,9 @@ class GitHubWaitAndMergeTests(ForgeTestCase):
             with self.subTest(name):
                 clock = _FakeClock()
                 fake = FakeCli(self.ORIGIN, gh=[(0, self._view(**overrides), "")])
-                got = self.run_with(fake, lambda: f.forge_wait(
+                got = self.run_with(fake, lambda c=clock: f.forge_wait(
                     self.repo, 42, timeout_s=60, interval_s=10,
-                    monotonic=clock.monotonic, sleep=clock.sleep))
+                    monotonic=c.monotonic, sleep=c.sleep))
                 self.assertEqual(got["state"], want)
                 self.assertEqual(got["head_sha"], self.HEAD)
                 self.assertEqual(clock.sleeps, [])
@@ -486,7 +484,7 @@ class GitHubWaitAndMergeTests(ForgeTestCase):
             with self.subTest(label):
                 clock = _FakeClock()
                 fake_q = FakeCli(self.ORIGIN, gh=[(0, "", stderr), (0, open_view, "")])
-                got_q = self.run_with(fake_q, lambda: f.forge_merge(self.repo, 42, self.HEAD, sleep=clock.sleep))
+                got_q = self.run_with(fake_q, lambda c=clock: f.forge_merge(self.repo, 42, self.HEAD, sleep=c.sleep))
                 self.assertEqual((got_q["merged"], got_q["reason"]), (False, "queued"))
                 self.assertEqual(clock.sleeps, [])
 
@@ -508,7 +506,7 @@ class GitHubWaitAndMergeTests(ForgeTestCase):
         # Confirming read fails once, then shows merged.
         clock = _FakeClock()
         fake = FakeCli(self.ORIGIN, gh=[(0, "", ""), (1, "", "shim banner\ntransient error"), (0, merged_view, "")])
-        got = self.run_with(fake, lambda: f.forge_merge(self.repo, 42, self.HEAD, sleep=clock.sleep))
+        got = self.run_with(fake, lambda c=clock: f.forge_merge(self.repo, 42, self.HEAD, sleep=c.sleep))
         self.assertEqual(got, {"merged": True, "merge_commit": self.MERGE_SHA,
                                "reason": "merged", "message": "squash merged"})
         self.assertEqual(len([c for c in fake.calls if c[:3] == ["gh", "pr", "merge"]]), 1)
@@ -542,7 +540,7 @@ class GitHubWaitAndMergeTests(ForgeTestCase):
             with self.subTest(label):
                 clock = _FakeClock()
                 fake = FakeCli(self.ORIGIN, gh=[(0, "", ""), *([read_reply] * expected_reads)])
-                got = self.run_with(fake, lambda: f.forge_merge(self.repo, 42, self.HEAD, sleep=clock.sleep))
+                got = self.run_with(fake, lambda c=clock: f.forge_merge(self.repo, 42, self.HEAD, sleep=c.sleep))
                 self.assertEqual((got["merged"], got["reason"], got["merge_commit"]), (False, "unconfirmed", None))
                 self.assertIn("merge command succeeded", got["message"])
                 self.assertIn("could not be confirmed", got["message"])
@@ -556,7 +554,7 @@ class GitHubWaitAndMergeTests(ForgeTestCase):
             with self.subTest(label):
                 clock = _FakeClock()
                 fake = FakeCli(self.ORIGIN, gh=[(1, "", "Pull request is not mergeable"), read_reply])
-                got = self.run_with(fake, lambda: f.forge_merge(self.repo, 42, self.HEAD, sleep=clock.sleep))
+                got = self.run_with(fake, lambda c=clock: f.forge_merge(self.repo, 42, self.HEAD, sleep=c.sleep))
                 self.assertEqual((got["merged"], got["reason"]), (False, "not_mergeable"))
                 self.assertEqual(len([c for c in fake.calls if c[:3] == ["gh", "pr", "merge"]]), 1)
                 self.assertEqual(len([c for c in fake.calls if c[:3] == ["gh", "pr", "view"]]), 1)
@@ -649,7 +647,7 @@ class GitLabWaitAndMergeTests(ForgeTestCase):
             with self.subTest(label):
                 clock = _FakeClock()
                 fake = FakeCli(GITLAB_ORIGIN, glab=[put, first_after, merged])
-                got = self.run_with(fake, lambda: f.forge_merge(self.repo, 14, self.HEAD, sleep=clock.sleep))
+                got = self.run_with(fake, lambda c=clock: f.forge_merge(self.repo, 14, self.HEAD, sleep=c.sleep))
                 self.assertEqual(got, {"merged": True, "merge_commit": self.MERGE_SHA,
                                        "reason": "merged", "message": "squash merged"})
                 self.assertEqual(len([c for c in fake.calls if c == put["argv"]]), 1)
@@ -669,7 +667,7 @@ class GitLabWaitAndMergeTests(ForgeTestCase):
             with self.subTest(label):
                 clock = _FakeClock()
                 fake = FakeCli(GITLAB_ORIGIN, glab=[put, *([bad_after] * expected_reads)])
-                got = self.run_with(fake, lambda: f.forge_merge(self.repo, 14, self.HEAD, sleep=clock.sleep))
+                got = self.run_with(fake, lambda c=clock: f.forge_merge(self.repo, 14, self.HEAD, sleep=c.sleep))
                 self.assertEqual((got["merged"], got["reason"], got["merge_commit"]), (False, "unconfirmed", None))
                 self.assertIn("merge command succeeded", got["message"])
                 self.assertIn("could not be confirmed", got["message"])
@@ -682,7 +680,7 @@ class GitLabWaitAndMergeTests(ForgeTestCase):
         read_argv = ["glab", "api", "projects/flownext%2Fflownext/merge_requests/14"]
         clock = _FakeClock()
         fake = FakeCli(GITLAB_ORIGIN, glab=[put])
-        got = self.run_with(fake, lambda: f.forge_merge(self.repo, 14, self.HEAD, sleep=clock.sleep))
+        got = self.run_with(fake, lambda c=clock: f.forge_merge(self.repo, 14, self.HEAD, sleep=c.sleep))
         self.assertEqual((got["merged"], got["reason"]), (False, "not_mergeable"))
         self.assertEqual(len([c for c in fake.calls if c == put["argv"]]), 1)
         self.assertEqual(len([c for c in fake.calls if c == read_argv]), 0)

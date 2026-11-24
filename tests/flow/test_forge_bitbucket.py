@@ -7,10 +7,8 @@ import json
 import subprocess
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
-from flowctl_test_support import FLOWCTL_CMD
 from test_forge import REAL_RUN, FakeCli, ForgeTestCase, f
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "bitbucket"

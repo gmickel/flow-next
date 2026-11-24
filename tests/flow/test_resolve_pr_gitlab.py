@@ -5,7 +5,6 @@ self-managed test project, reviewed by a second user, with one thread fixed, rep
 resolved, one diff thread made outdated by a later push, and a top-level note answered).
 """
 import json
-import re
 import subprocess
 import unittest
 from pathlib import Path

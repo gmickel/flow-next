@@ -12,11 +12,9 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from flowctl_test_support import git
-from test_forge import f
-from test_forge_bitbucket import ORIGIN, BktCli, branch_argv
+from test_forge_bitbucket import branch_argv
 
 TESTS = Path(__file__).resolve().parent
 SCRIPTS = TESTS.parents[1] / "plugins" / "flow" / "skills" / "flow" / "scripts"

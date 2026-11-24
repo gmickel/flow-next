@@ -16,19 +16,22 @@ Separately and optionally, write model and effort preferences in the same file i
 
 Use one of the two per repository. With both active in the same repository, requests are split between them unpredictably.
 
-- **Claude Code:** enable this plugin per repository, not for your whole user account, and switch Classic off there. In the repository's `.claude/settings.local.json`: `{"enabledPlugins": {"flow@flow-next": true, "flow-next@flow-next": false}}` (`flow@flow-dev` when installed from a local checkout).
+- **Claude Code:** enable this plugin per repository, not for your whole user account, and switch Classic off there. In the repository's `.claude/settings.local.json`: `{"enabledPlugins": {"flow@flow-next": true, "flow-next@flow-next": false}}`.
 - **Other hosts** have no per-repository switch: install one or the other.
 - Add the repo line above. In a repository that carries it, development requests go to this plugin.
 
-## Install from a local checkout
+## Install
 
-- **Claude Code:** `claude --plugin-dir ./plugins/flow` for a session (local marketplace `flow-dev` not yet run).
-- **Factory Droid:** local marketplace `flow-dev` (`./plugins/flow`) and `flow@flow-dev` (not yet tried).
+- **Claude Code:** `/plugin marketplace add gmickel/flow-next`, then `/plugin install flow@flow-next`. To enable it for one repository only, run `claude plugin install flow@flow-next --scope local` in that repository.
+- **Codex:** `codex plugin marketplace add gmickel/flow-next`, then `codex plugin add flow@flow-next-marketplace`.
+
+From a checkout of this repository:
+
 - **Grok Build:** `grok plugin install ./plugins/flow --trust`.
-- **Codex:** copy `./plugins/flow/skills/flow` into Codex's `skills/` directory (local marketplace `flow-dev` not yet run).
-- **Cursor:** `--plugin-dir ./plugins/flow` for a session, or copy `./plugins/flow` to `~/.cursor/plugins/local/flow` and restart.
 - **Muse Code:** `muse plugins install ./plugins/flow --scope user`, or `./plugins/flow/install/install.sh muse`.
-- **OpenCode, Antigravity CLI:** `./plugins/flow/install/install.sh <opencode|antigravity>` (copies `skills/flow`, plus `plugin.json` for Antigravity; other directories stay untouched).
+- **Cursor:** copy `./plugins/flow` to `~/.cursor/plugins/local/flow` and restart, or `--plugin-dir ./plugins/flow` for one session.
+- **OpenCode, Antigravity CLI:** `./plugins/flow/install/install.sh <opencode|antigravity>`.
+- **Factory Droid:** add this repository as a marketplace and install `flow@flow-next` (not yet tried).
 
 ## If Flow is not being picked up
 

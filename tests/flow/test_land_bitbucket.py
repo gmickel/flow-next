@@ -6,14 +6,11 @@ request 10 with a green build, approved by a second workspace user; 11 with a fa
 check and changes requested by that user; 13 in conflict with main; 14 stacked on 10's branch;
 12 squash-merged after its branch moved past the head that was read).
 """
-import json
-import re
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from test_forge_bitbucket import BktCli, ForgeTestCase, derived, f, fixture, under
-from test_make_pr_bitbucket import BitbucketShellCase, answers, recorded
 
 SKILLS = Path(__file__).resolve().parents[2] / "plugins" / "flow" / "skills"
 REPO = "/repositories/flownextnew/flownext"
@@ -277,7 +274,7 @@ class BitbucketWaitAndMergeTests(ForgeTestCase):
                 clock = self._clock()
                 fake = BktCli(bkt=[fixture("land-pr-ready"), fixture("land-commit-ready"),
                                    post, first_after, merged])
-                got = self.run_with(fake, lambda: f.forge_merge(self.repo, 10, READY, sleep=clock.sleep))
+                got = self.run_with(fake, lambda c=clock: f.forge_merge(self.repo, 10, READY, sleep=c.sleep))
                 self.assertEqual(got, {"merged": True, "merge_commit": "999999999999",
                                        "reason": "merged", "message": "squash merged"})
                 self.assertEqual(len([c for c in fake.calls if c == post["argv"]]), 1)
@@ -297,7 +294,7 @@ class BitbucketWaitAndMergeTests(ForgeTestCase):
                 clock = self._clock()
                 fake = BktCli(bkt=[fixture("land-pr-ready"), fixture("land-commit-ready"),
                                    post, *([bad_after] * expected_reads)])
-                got = self.run_with(fake, lambda: f.forge_merge(self.repo, 10, READY, sleep=clock.sleep))
+                got = self.run_with(fake, lambda c=clock: f.forge_merge(self.repo, 10, READY, sleep=c.sleep))
                 self.assertEqual((got["merged"], got["reason"], got["merge_commit"]), (False, "unconfirmed", None))
                 self.assertIn("merge command succeeded", got["message"])
                 self.assertIn("could not be confirmed", got["message"])
@@ -310,7 +307,7 @@ class BitbucketWaitAndMergeTests(ForgeTestCase):
         refused = self._merge_post_10(returncode=1, stdout="", stderr="merge refused by branch restriction")
         clock = self._clock()
         fake = BktCli(bkt=[fixture("land-pr-ready"), fixture("land-commit-ready"), refused])
-        got = self.run_with(fake, lambda: f.forge_merge(self.repo, 10, READY, sleep=clock.sleep))
+        got = self.run_with(fake, lambda c=clock: f.forge_merge(self.repo, 10, READY, sleep=c.sleep))
         self.assertEqual((got["merged"], got["reason"]), (False, "not_mergeable"))
         self.assertEqual(len([c for c in fake.calls if c == refused["argv"]]), 1)
         self.assertEqual(len([c for c in fake.calls if c == pr_argv]), 1)  # pre-check only

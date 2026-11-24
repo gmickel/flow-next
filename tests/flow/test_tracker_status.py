@@ -18,9 +18,7 @@ sys.path.insert(0, str(ROOT / "skills" / "flow" / "scripts"))
 
 from flowctl_tracker import spec_store as SS  # noqa: E402
 from flowctl_tracker import status as S  # noqa: E402
-from flowctl_tracker.status import verb as V  # noqa: E402
 from flowctl_tracker.status.policy import (  # noqa: E402
-    COMPLETION_REVIEW_SATISFYING, COMPLETION_REVIEW_STATUSES,
     decide, flow_to_normalized, in_progress_wins_matches, is_deadlock,
     merge_evidence, terminal_wins_matches, validate_conflict_tiebreak,
 )
@@ -483,7 +481,7 @@ class StatusVerbGate(unittest.TestCase):
             flow = Path(tmp) / ".flow"
             cfg = gh_cfg()
             cfg["tracker"]["conflictTiebreak"] = "tracker-wins"
-            path = _write_flow(
+            _write_flow(
                 flow, cfg,
                 tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
                          "lastSyncedAt": "OLD", "linkState": "linked"},
@@ -787,7 +785,7 @@ class JiraTransitions(unittest.TestCase):
     def test_no_legal_transition_defers_with_receipt_no_advance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, jr_cfg(),
                 spec_extra={"status": "open"},
                 tracker={"id": JR_ID, "identifier": "SCRUM-1", "url": "u",
@@ -1538,7 +1536,7 @@ class AmbiguousStatusLabels(unittest.TestCase):
         safe repair target, so ambiguity is repaired instead of silent noop."""
         with tempfile.TemporaryDirectory() as tmp:
             flow = Path(tmp) / ".flow"
-            path = _write_flow(
+            _write_flow(
                 flow, gh_cfg(),
                 tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
                          "lastSyncedAt": "OLD", "linkState": "linked"},
@@ -1798,7 +1796,6 @@ class StatusClaimSerialization(unittest.TestCase):
                              "claim released after the transaction finished")
 
     def test_stale_dead_pid_claim_is_reclaimed(self) -> None:
-        import os
         import socket
         import time
         with tempfile.TemporaryDirectory() as tmp:

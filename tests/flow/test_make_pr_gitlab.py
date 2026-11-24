@@ -12,10 +12,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from flowctl_test_support import git
-from test_forge import GITLAB_ORIGIN, FakeCli, f
 
 TESTS = Path(__file__).resolve().parent
 SCRIPTS = TESTS.parents[1] / "plugins" / "flow" / "skills" / "flow" / "scripts"

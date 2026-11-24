@@ -5,7 +5,6 @@ flownextnew/flownext test repository: a general and an inline comment, a reply a
 it, a comment resolved and one deleted, and a later push that changed the inline comment's line).
 """
 import json
-import re
 import subprocess
 import unittest
 from pathlib import Path
