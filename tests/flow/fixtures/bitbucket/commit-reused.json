@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "bkt",
+    "--context",
+    "flownextnew",
+    "api",
+    "/repositories/flownextnew/flownext/commit/ef14a8697d98"
+  ],
+  "env": {},
+  "returncode": 0,
+  "stdout": "{\"type\": \"commit\", \"hash\": \"ef14a8697d98cb0eb95e9e706fa763f10977b16a\", \"date\": \"2026-11-13T10:37:09+00:00\", \"author\": {\"type\": \"author\", \"raw\": \"Gordon Mickel <gordon.mickel@gmail.com>\", \"user\": {\"display_name\": \"Gordon Mickel\", \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/users/%7B3c2b0230-9057-4392-bf23-e6908648a704%7D\"}, \"avatar\": {\"href\": \"https://secure.gravatar.com/avatar/ef2bcde2c659500cfa9d774b0f8652fc?d=https%3A%2F%2Favatar-management--avatars.us-west-2.prod.public.atl-paas.net%2Finitials%2FGM-3.png\"}, \"html\": {\"href\": \"https://bitbucket.org/%7B3c2b0230-9057-4392-bf23-e6908648a704%7D/\"}}, \"type\": \"user\", \"uuid\": \"{3c2b0230-9057-4392-bf23-e6908648a704}\", \"account_id\": \"557058:2181cc82-375b-4f4c-9cfe-0a00ff94fec7\", \"nickname\": \"Gordon Mickel\"}}, \"message\": \"test: fx-reused fixture\\n\", \"summary\": {\"type\": \"rendered\", \"raw\": \"test: fx-reused fixture\\n\", \"markup\": \"markdown\", \"html\": \"<p>test: fx-reused fixture</p>\"}, \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/commit/ef14a8697d98cb0eb95e9e706fa763f10977b16a\"}, \"html\": {\"href\": \"https://bitbucket.org/flownextnew/flownext/commits/ef14a8697d98cb0eb95e9e706fa763f10977b16a\"}, \"diff\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/diff/ef14a8697d98cb0eb95e9e706fa763f10977b16a\"}, \"approve\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/commit/ef14a8697d98cb0eb95e9e706fa763f10977b16a/approve\"}, \"comments\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/commit/ef14a8697d98cb0eb95e9e706fa763f10977b16a/comments\"}, \"statuses\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/commit/ef14a8697d98cb0eb95e9e706fa763f10977b16a/statuses\"}, \"patch\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/patch/ef14a8697d98cb0eb95e9e706fa763f10977b16a\"}}, \"parents\": [{\"hash\": \"36e7b9fa146049c2db3a03edc50eeb5f1ef48034\", \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext/commit/36e7b9fa146049c2db3a03edc50eeb5f1ef48034\"}, \"html\": {\"href\": \"https://bitbucket.org/flownextnew/flownext/commits/36e7b9fa146049c2db3a03edc50eeb5f1ef48034\"}}, \"type\": \"commit\"}], \"rendered\": {\"message\": {\"type\": \"rendered\", \"raw\": \"test: fx-reused fixture\\n\", \"markup\": \"markdown\", \"html\": \"<p>test: fx-reused fixture</p>\"}}, \"repository\": {\"type\": \"repository\", \"full_name\": \"flownextnew/flownext\", \"links\": {\"self\": {\"href\": \"https://api.bitbucket.org/2.0/repositories/flownextnew/flownext\"}, \"html\": {\"href\": \"https://bitbucket.org/flownextnew/flownext\"}, \"avatar\": {\"href\": \"https://bytebucket.org/ravatar/%7B76200a41-2732-4216-b998-173d37224d40%7D?ts=default\"}}, \"name\": \"flownext\", \"uuid\": \"{76200a41-2732-4216-b998-173d37224d40}\"}, \"participants\": []}",
+  "stderr": "",
+  "recorded": "2026-11-13",
+  "bkt": "0.38.1",
+  "server": "Bitbucket Cloud"
+}

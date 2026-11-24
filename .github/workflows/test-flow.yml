@@ -1,0 +1,42 @@
+name: Test Flow Plugin
+
+on:
+  push:
+    paths:
+      - 'plugins/flow/**'
+      - 'tests/flow/**'
+      - '.github/workflows/test-flow.yml'
+  pull_request:
+    paths:
+      - 'plugins/flow/**'
+      - 'tests/flow/**'
+      - '.github/workflows/test-flow.yml'
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Configure git line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@flow.local"
+          git config --global user.name "Flow CI"
+          git config --global init.defaultBranch main
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests/flow -p "test_*.py" -v

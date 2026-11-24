@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "personal_access_tokens/self"
+  ],
+  "env": {
+    "GITLAB_HOST": "localhost:8929",
+    "GITLAB_TOKEN": "<a read_api-only personal access token>"
+  },
+  "returncode": 0,
+  "stdout": "{\"id\":2,\"name\":\"fn73-read-api-fixture\",\"revoked\":false,\"created_at\":\"2026-11-04T10:54:15.578Z\",\"description\":null,\"scopes\":[\"read_api\"],\"user_id\":1,\"last_used_at\":\"2026-11-04T10:54:15.779Z\",\"last_used_ips\":[\"172.24.0.1\"],\"active\":true,\"granular\":false,\"expires_at\":\"2026-11-11\"}",
+  "stderr": "",
+  "recorded": "2026-11-04",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Free)"
+}

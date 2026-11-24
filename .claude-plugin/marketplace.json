@@ -27,6 +27,24 @@
         "execution"
       ],
       "source": "./plugins/flow-next"
+    },
+    {
+      "name": "flow",
+      "description": "Flow-Next One (preview): spec-driven agentic development with one router, cross-model review, and git-native state.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Gordon Mickel",
+        "email": "gordon@mickel.tech",
+        "url": "https://mickel.tech"
+      },
+      "homepage": "https://flow-next.dev",
+      "tags": [
+        "claude-code",
+        "plugin",
+        "workflow",
+        "preview"
+      ],
+      "source": "./plugins/flow"
     }
   ]
 }

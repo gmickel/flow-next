@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "projects/flownext%2Fflownext/merge_requests/999/diffs?per_page=100&page=1"
+  ],
+  "env": {
+    "GITLAB_HOST": "localhost:8929"
+  },
+  "returncode": 1,
+  "stdout": "{\"message\":\"404 Not found\"}",
+  "stderr": "glab: 404 Not found (HTTP 404)\n",
+  "recorded": "2026-11-05",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Ultimate trial)"
+}

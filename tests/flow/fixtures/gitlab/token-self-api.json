@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "personal_access_tokens/self"
+  ],
+  "env": {
+    "GITLAB_HOST": "localhost:8929"
+  },
+  "returncode": 0,
+  "stdout": "{\"id\":1,\"name\":\"flow-next-fn73\",\"revoked\":false,\"created_at\":\"2026-11-04T09:57:08.754Z\",\"description\":\"\",\"scopes\":[\"api\"],\"user_id\":1,\"last_used_at\":\"2026-11-04T10:53:52.757Z\",\"last_used_ips\":[\"172.24.0.1\"],\"active\":true,\"granular\":false,\"expires_at\":\"2026-12-04\"}",
+  "stderr": "",
+  "recorded": "2026-11-04",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Free)"
+}

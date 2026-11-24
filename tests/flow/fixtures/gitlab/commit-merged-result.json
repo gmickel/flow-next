@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "glab",
+    "api",
+    "projects/flownext%2Fflownext/repository/commits/200b0dee9c049b7f82f7795a8e9c370c35e17079"
+  ],
+  "env": {
+    "GITLAB_HOST": "localhost:8929"
+  },
+  "returncode": 0,
+  "stdout": "{\"id\":\"200b0dee9c049b7f82f7795a8e9c370c35e17079\",\"short_id\":\"200b0dee\",\"created_at\":\"2026-11-05T13:12:58.000+00:00\",\"parent_ids\":[\"4a7a5f148410410d7534e649ebb4aca9ee88ea78\",\"893b8431862d74bb30007d713ce2e438adccb1aa\"],\"title\":\"Merge branch 'fn317-mrp' into 'main'\",\"message\":\"Merge branch 'fn317-mrp' into 'main'\\n\\nfn-317 fixture: merged results pipeline\\n\\nSee merge request flownext/flownext!21\",\"author_name\":\"Gordon Mickel\",\"author_email\":\"gitlab_admin_809f6a@example.com\",\"authored_date\":\"2026-11-05T13:12:58.000+00:00\",\"committer_name\":\"Gordon Mickel\",\"committer_email\":\"gitlab_admin_809f6a@example.com\",\"committed_date\":\"2026-11-05T13:12:58.000+00:00\",\"trailers\":{},\"extended_trailers\":{},\"web_url\":\"http://localhost:8929/flownext/flownext/-/commit/200b0dee9c049b7f82f7795a8e9c370c35e17079\",\"stats\":{\"additions\":3,\"deletions\":0,\"total\":3},\"status\":\"success\",\"project_id\":1,\"last_pipeline\":{\"id\":27,\"iid\":28,\"project_id\":1,\"sha\":\"200b0dee9c049b7f82f7795a8e9c370c35e17079\",\"ref\":\"refs/merge-requests/21/merge\",\"status\":\"success\",\"source\":\"merge_request_event\",\"created_at\":\"2026-11-05T13:13:04.379Z\",\"updated_at\":\"2026-11-05T13:13:12.128Z\",\"web_url\":\"http://localhost:8929/flownext/flownext/-/pipelines/27\"}}",
+  "stderr": "",
+  "recorded": "2026-11-05",
+  "glab": "1.124.0",
+  "server": "GitLab EE 19.5.3 (self-managed, Ultimate trial)"
+}

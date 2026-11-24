@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PR_NUMBER="${1:?Usage: $0 PR_NUMBER COMMENT_NODE_ID [OWNER/REPO]}"
+COMMENT_NODE_ID="${2:?Usage: $0 PR_NUMBER COMMENT_NODE_ID [OWNER/REPO]}"
+OWNER_REPO="${3:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"
+OWNER="${OWNER_REPO%/*}"
+REPO="${OWNER_REPO#*/}"
+
+# Minimal thread listing (IDs + comment IDs only, no bodies) to find the
+# matching thread for a given comment node id. Paginates reviewThreads AND
+# per-thread comments — long threads can exceed 100 comments; if we stopped
+# at the first page, targeted mode would silently fail for comments posted
+# later in a long review.
+
+fetch_threads_page() {
+  local cursor_arg=""
+  if [ -n "${1:-}" ]; then
+    cursor_arg="-F cursor=$1"
+  fi
+  # shellcheck disable=SC2086
+  gh api graphql \
+    -f owner="$OWNER" \
+    -f repo="$REPO" \
+    -F pr="$PR_NUMBER" \
+    $cursor_arg \
+    -f query='
+    query($owner: String!, $repo: String!, $pr: Int!, $cursor: String) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $pr) {
+          reviewThreads(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              isResolved
+              isOutdated
+              path
+              line
+              originalLine
+              startLine
+              originalStartLine
+              comments(first: 100) {
+                pageInfo { hasNextPage endCursor }
+                nodes {
+                  id
+                  author { login }
+                  body
+                  createdAt
+                }
+              }
+            }
+          }
+        }
+      }
+    }'
+}
+
+fetch_thread_comments_page() {
+  local thread_id="$1"
+  local cursor_arg=""
+  if [ -n "${2:-}" ]; then
+    cursor_arg="-F cursor=$2"
+  fi
+  # shellcheck disable=SC2086
+  gh api graphql \
+    -F thread="$thread_id" \
+    $cursor_arg \
+    -f query='
+    query($thread: ID!, $cursor: String) {
+      node(id: $thread) {
+        ... on PullRequestReviewThread {
+          comments(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              author { login }
+              body
+              createdAt
+            }
+          }
+        }
+      }
+    }'
+}
+
+# Short-circuits on first match: walk pages; for each thread check first page
+# of comments; on miss, page through remaining comments; if found, print and
+# exit. Avoids fetching all threads when the target is early.
+
+check_thread() {
+  # Takes a thread JSON blob; returns:
+  #   0 + prints the full thread (preserving id/path/line/isResolved) when found
+  #   1 when not matched
+  #   2 on API/pagination/JSON failure (never returns partial comments)
+  local thread="$1"
+  local tid thas_next tcursor all_comments
+  tid="$(printf '%s' "$thread" | jq -r '.id')" || return 2
+  all_comments="$(printf '%s' "$thread" | jq -c 'if (.comments.nodes | type) == "array" then .comments.nodes else error("missing comments.nodes") end')" || return 2
+  local matched=0
+
+  # First page of comments (already fetched).
+  if printf '%s' "$all_comments" | jq -e --arg cid "$COMMENT_NODE_ID" \
+      'map(.id) | index($cid)' >/dev/null; then
+    matched=1
+  fi
+
+  local tmeta
+  tmeta="$(printf '%s' "$thread" | jq -r '
+    if (.comments.pageInfo.hasNextPage | type) != "boolean" then error("missing thread comments.pageInfo.hasNextPage")
+    elif .comments.pageInfo.hasNextPage == true
+         and (((.comments.pageInfo.endCursor | type) != "string")
+              or ((.comments.pageInfo.endCursor | length) == 0)) then
+      error("missing thread comments.pageInfo.endCursor")
+    else
+      [(.comments.pageInfo.hasNextPage | tostring), (.comments.pageInfo.endCursor // "")] | join("\u001f")
+    end')" || return 2
+  IFS=$'\x1f' read -r thas_next tcursor <<< "$tmeta"
+  while [ "$thas_next" = "true" ]; do
+    local page more_nodes pmeta
+    page="$(fetch_thread_comments_page "$tid" "$tcursor")" || return 2
+    pmeta="$(printf '%s' "$page" | jq -r '
+      if ((.errors // []) | length) > 0 then error("GraphQL response contained errors")
+      elif (.data.node.comments.nodes | type) != "array" then error("missing comments.nodes")
+      elif (.data.node.comments.pageInfo.hasNextPage | type) != "boolean" then error("missing comments.pageInfo.hasNextPage")
+      elif .data.node.comments.pageInfo.hasNextPage == true
+           and (((.data.node.comments.pageInfo.endCursor | type) != "string")
+                or ((.data.node.comments.pageInfo.endCursor | length) == 0)) then
+        error("missing comments.pageInfo.endCursor")
+      else
+        [(.data.node.comments.pageInfo.hasNextPage | tostring), (.data.node.comments.pageInfo.endCursor // "")] | join("\u001f")
+      end')" || return 2
+    more_nodes="$(printf '%s' "$page" | jq -c '.data.node.comments.nodes')" || return 2
+    all_comments="$(printf '%s\n%s\n' "$all_comments" "$more_nodes" | jq -cs '.[0] + .[1]')" || return 2
+    if [ "$matched" = "0" ] && printf '%s' "$more_nodes" | jq -e --arg cid "$COMMENT_NODE_ID" \
+        'map(.id) | index($cid)' >/dev/null; then
+      matched=1
+    fi
+    IFS=$'\x1f' read -r thas_next tcursor <<< "$pmeta"
+  done
+
+  if [ "$matched" = "1" ]; then
+    printf '%s\n%s\n' "$thread" "$all_comments" | jq -s '
+      .[0] as $t | .[1] as $c | {
+        id: $t.id,
+        path: $t.path,
+        line: ($t.line // $t.originalLine),
+        originalLine: $t.originalLine,
+        startLine: $t.startLine,
+        originalStartLine: $t.originalStartLine,
+        isOutdated: $t.isOutdated,
+        isResolved: $t.isResolved,
+        comments: $c
+      }' || return 2
+    return 0
+  fi
+  return 1
+}
+
+cursor=""
+has_next="true"
+while [ "$has_next" = "true" ]; do
+  page="$(fetch_threads_page "$cursor")"
+  page_meta="$(printf '%s' "$page" | jq -r '
+    if ((.errors // []) | length) > 0 then error("GraphQL response contained errors")
+    elif (.data.repository.pullRequest | type) != "object" then error("missing pullRequest in GraphQL response")
+    elif (.data.repository.pullRequest.reviewThreads.nodes | type) != "array" then error("missing reviewThreads.nodes")
+    elif (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage | type) != "boolean" then error("missing reviewThreads.pageInfo.hasNextPage")
+    elif .data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == true
+         and (((.data.repository.pullRequest.reviewThreads.pageInfo.endCursor | type) != "string")
+              or ((.data.repository.pullRequest.reviewThreads.pageInfo.endCursor | length) == 0)) then
+      error("missing reviewThreads.pageInfo.endCursor")
+    else
+      [
+        (.data.repository.pullRequest.reviewThreads.nodes | length | tostring),
+        (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage | tostring),
+        (.data.repository.pullRequest.reviewThreads.pageInfo.endCursor // "")
+      ] | join("\u001f")
+    end')" || exit 2
+  IFS=$'\x1f' read -r count has_next cursor <<< "$page_meta"
+  i=0
+  while [ "$i" -lt "$count" ]; do
+    thread="$(printf '%s' "$page" | jq ".data.repository.pullRequest.reviewThreads.nodes[$i]")"
+    rc=0
+    check_thread "$thread" || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      exit 0
+    elif [ "$rc" -ne 1 ]; then
+      exit "$rc"
+    fi
+    i=$((i + 1))
+  done
+done
+# No match — silent exit 0, caller checks output empty.
