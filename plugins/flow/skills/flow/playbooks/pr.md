@@ -1,6 +1,6 @@
 # Pull Request
 
-Commit any spec on the same branch as the code before opening. Write the PR body directly, and never overwrite a body a person edited without asking.
+Commit any spec on the same branch as the code before opening. When this PR completes a spec that sits in `.flow/specs/open/`, move it to `.flow/specs/` with `git mv` in a commit of its own, and fix any reference to the old path inside the repository in that commit. Do this before opening the PR, never while landing. Write the PR body directly, and never overwrite a body a person edited without asking.
 
 ## Body layout
 

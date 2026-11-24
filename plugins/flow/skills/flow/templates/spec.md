@@ -1,5 +1,5 @@
 ---
-id: <spec-id-or-tracker-key>
+id: <title-slug, prefixed with the tracker key when linked>
 title: <title>
 # Include only when applicable:
 # tracker:
