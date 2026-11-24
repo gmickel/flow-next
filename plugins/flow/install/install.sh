@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copy the self-contained Flow-Next (preview) skill folder for hosts without a
+# Copy the self-contained Flow-Next One (preview) skill folder for hosts without a
 # marketplace install: opencode, muse, or antigravity. Leaves shared
 # directories untouched.
 set -eu

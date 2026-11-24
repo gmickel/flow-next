@@ -1,6 +1,6 @@
-# Flow-Next (preview)
+# Flow-Next One (preview)
 
-`flow` is the Flow-Next preview plugin beside Flow-Next Classic (`flow-next`). It ships one self-contained skill folder (`skills/flow/`) with playbooks for specs, review, PRs, landing, priming, setup, and porting, plus `skills/flow/scripts/edge` for tracker and forge calls.
+Flow-Next One is a preview plugin (`flow`) beside Flow-Next Classic (`flow-next`). It ships one self-contained skill folder (`skills/flow/`) with playbooks for specs, review, PRs, landing, priming, setup, and porting, plus `skills/flow/scripts/edge` for tracker and forge calls.
 
 ## Recommended repo line
 

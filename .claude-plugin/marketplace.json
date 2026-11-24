@@ -30,7 +30,7 @@
     },
     {
       "name": "flow",
-      "description": "Flow-Next (preview): spec-driven agentic development with one router, cross-model review, and git-native state.",
+      "description": "Flow-Next One (preview): spec-driven agentic development with one router, cross-model review, and git-native state.",
       "version": "0.1.0",
       "author": {
         "name": "Gordon Mickel",
