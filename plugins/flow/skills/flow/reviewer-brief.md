@@ -34,7 +34,7 @@ Severity is defined against intent: **blocker** means the intended case is wrong
 
 Give each finding a stable id (`S1`, `S2`, ...) with its severity, location (`path:line` or `-`), failing scenario, and suggested fix so later rounds and commit messages can refer to it.
 
-On a later round, answer each prior finding first, then look again at the change as it now stands, including what the fixes touched; do not narrow your scope to the fixes, because a review scoped only to the delta misses what the fixes broke elsewhere.
+On a later round, answer each prior finding first, then look again at the change as it now stands, including what the fixes touched; do not narrow your scope to the fixes, because a review scoped only to the delta misses what the fixes broke elsewhere. On a later round, hold the change back only for a prior finding that is still open, or for a new blocker or should that the fixes introduced; report anything else new as a nit, and accept a declined finding whose stated reason holds.
 
 ## Scope by review kind
 

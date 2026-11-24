@@ -16,9 +16,9 @@ Record fixed and declined findings by id (`S1`, `S2`, ...) and the reviewer's ve
 
 ## Rounds
 
-When a person is waiting, hand the result back first, in its own message, then run the review in the background and report its verdict, and any fix, when it lands. Where the host cannot wake the session when the review finishes, wait for it instead. After fixing, re-review once, with one reviewer looking at the fixes, in the same reviewer session wherever the harness can resume it, and stop there: give the person any findings that remain, with the reviewer's reasons. Later fixes, including ones the person asks for, get focused tests, not another review. A PR waits for the verdict.
+When a person is waiting, hand the result back first, in its own message, then run the review in the background and report its verdict, and any fix, when it lands. Where the host cannot wake the session when the review finishes, wait for it instead. After fixing, re-review once, with one reviewer, in the same reviewer session wherever the harness can resume it, and stop there: give the person any findings that remain, with the reviewer's reasons. Later fixes, including ones the person asks for, get focused tests, not another review. A PR waits for the verdict.
 
-Unattended, or when asked to review until SHIP, loop. Each later round is one reviewer checking that earlier findings are fixed or rightly declined; it holds the change back only for a new serious problem the fixes introduced. Where a session cannot be resumed, pass a fresh reviewer the findings ledger from the commit messages. Stop at eight rounds as a hard cap—reaching it is not approval; end the loop and hand the open findings to the person. Escalate any item disputed twice to the person. `MAJOR_RETHINK` stops the loop; `NEEDS_HUMAN` goes to the person.
+Unattended, or when asked to review until SHIP, loop. Each later round is one reviewer, under the later-round rule in `reviewer-brief.md`. Where a session cannot be resumed, pass a fresh reviewer the findings ledger from the commit messages. Stop at eight rounds as a hard cap—reaching it is not approval; end the loop and hand the open findings to the person. Escalate any item disputed twice to the person. `MAJOR_RETHINK` stops the loop; `NEEDS_HUMAN` goes to the person.
 
 ## Other review routes
 
