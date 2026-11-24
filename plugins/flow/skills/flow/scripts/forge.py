@@ -546,6 +546,8 @@ def _bitbucket_merge_rows(repo: Path, origin: "ForgeOrigin", branch: str) -> Opt
 # --- Wait and merge verbs (GitHub, GitLab, Bitbucket) ---
 _WAIT_DEFAULT_TIMEOUT_S = 480   # 8 min: leaves margin under typical 10-min agent shell caps
 _WAIT_DEFAULT_INTERVAL_S = 15
+_WAIT_NO_CI_GRACE_S = 90
+_WAIT_NO_CI_REASONS = {"pipeline missing", "no build status reported on head"}
 _FORGE_MERGE_TIMEOUT_S = 30
 _MERGE_CONFIRM_RETRIES = 3
 _MERGE_CONFIRM_INTERVAL_S = 2.0
@@ -638,6 +640,8 @@ def _github_wait_probe(repo: Path, origin: "ForgeOrigin", number: int) -> dict:
     review = str(data.get("reviewDecision") or "").upper()
     if mergeable == "UNKNOWN" or merge_state == "UNKNOWN":
         return _wait_row("pending", head, "mergeability computing")
+    if merge_state == "UNSTABLE":
+        return _wait_row("pending", head, "commit status not passing yet")
     if mergeable == "CONFLICTING" or merge_state == "DIRTY":
         return _wait_row("blocked", head, "merge conflict")
     if review in {"CHANGES_REQUESTED", "REVIEW_REQUIRED"}:
@@ -962,15 +966,24 @@ def forge_wait(repo: Path, number: int, *, timeout_s: float = _WAIT_DEFAULT_TIME
     probe, forge, origin = _forge_read(repo, "wait_probe")
     if probe is None:
         return _wait_row("error", None, f"forge wait is unsupported on {forge}")
-    deadline = monotonic() + max(0.0, float(timeout_s))
+    start = monotonic()
+    deadline = start + max(0.0, float(timeout_s))
+    grace_until = start + _WAIT_NO_CI_GRACE_S
     while True:
         row = probe(repo, origin, number)
+        now = monotonic()
+        no_ci = row["state"] == "blocked" and row["reason"] in _WAIT_NO_CI_REASONS
+        if no_ci and now < grace_until:
+            row = {**row, "state": "pending"}
         if row["state"] != "pending":
             return row
-        remaining = deadline - monotonic()
+        remaining = deadline - now
         if remaining <= 0:
             return {**row, "reason": f"deadline reached ({row['reason']})"}
-        sleep(min(float(interval_s), remaining))
+        wait_for = min(float(interval_s), remaining)
+        if no_ci:
+            wait_for = min(wait_for, grace_until - now)
+        sleep(wait_for)
 
 
 def forge_merge(repo: Path, number: int, head: str, *, sleep: Any = None) -> dict:

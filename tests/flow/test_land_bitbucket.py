@@ -204,6 +204,32 @@ class BitbucketWaitAndMergeTests(ForgeTestCase):
         self.assertIn("deadline reached", got["reason"])
         self.assertEqual(clock.sleeps, [10.0, 10.0])
 
+    def test_wait_empty_build_statuses_grace_period(self):
+        # Empty build-status list at start, then populated green status: ends ready.
+        clock = self._clock()
+        fake = BktCli(bkt=[
+            fixture("land-pr-approved-fields"), fixture("land-commit-ready"),
+            statuses_of("land-statuses-none", READY), statuses_of("land-statuses-successful", READY),
+            fixture("land-checks-clean"),
+        ])
+        got = self.run_with(fake, lambda: f.forge_wait(
+            self.repo, 10, timeout_s=300, interval_s=15, monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got["state"], "ready")
+        self.assertEqual(clock.sleeps, [15.0])
+
+        # Empty build-status list past grace period: ends blocked with existing reason.
+        clock2 = self._clock()
+        fake2 = BktCli(bkt=[
+            fixture("land-pr-approved-fields"), fixture("land-commit-ready"),
+            statuses_of("land-statuses-none", READY), fixture("land-checks-clean"),
+        ])
+        got2 = self.run_with(fake2, lambda: f.forge_wait(
+            self.repo, 10, timeout_s=300, interval_s=25, monotonic=clock2.monotonic, sleep=clock2.sleep))
+        self.assertEqual(got2["state"], "blocked")
+        self.assertEqual(got2["reason"], "no build status reported on head")
+        self.assertEqual(sum(clock2.sleeps), f._WAIT_NO_CI_GRACE_S)
+        self.assertEqual(clock2.sleeps, [25.0, 25.0, 25.0, 15.0])
+
     def test_merge_succeeds_and_detects_race_window(self):
         merge_post_10 = {
             **fixture("land-merge-race"),

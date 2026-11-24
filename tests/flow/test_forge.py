@@ -451,6 +451,42 @@ class GitHubWaitAndMergeTests(ForgeTestCase):
         self.assertIn("deadline reached", got2["reason"])
         self.assertEqual(clock2.sleeps, [10.0, 10.0, 5.0])
 
+    def test_wait_unstable_empty_rollup_is_pending_not_ready(self):
+        # UNSTABLE with empty rollup stays pending until deadline (or until CLEAN).
+        unstable_empty = self._view(mergeStateStatus="UNSTABLE", statusCheckRollup=[])
+        clock = _FakeClock()
+        fake = FakeCli(self.ORIGIN, gh=lambda argv: (0, unstable_empty, ""))
+        got = self.run_with(fake, lambda: f.forge_wait(
+            self.repo, 42, timeout_s=20, interval_s=10,
+            monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got["state"], "pending")
+        self.assertIn("commit status not passing yet", got["reason"])
+        self.assertEqual(clock.sleeps, [10.0, 10.0])
+
+        # UNSTABLE with a failing check still returns failing immediately.
+        unstable_fail = self._view(
+            mergeStateStatus="UNSTABLE",
+            statusCheckRollup=[{"name": "ci", "status": "COMPLETED", "conclusion": "FAILURE"}],
+        )
+        clock_f = _FakeClock()
+        fake_f = FakeCli(self.ORIGIN, gh=[(0, unstable_fail, "")])
+        got_f = self.run_with(fake_f, lambda: f.forge_wait(
+            self.repo, 42, timeout_s=60, interval_s=15,
+            monotonic=clock_f.monotonic, sleep=clock_f.sleep))
+        self.assertEqual(got_f["state"], "failing")
+        self.assertEqual(got_f["failing_checks"], ["ci"])
+        self.assertEqual(clock_f.sleeps, [])
+
+        # CLEAN with an empty rollup is still ready immediately.
+        clean_empty = self._view(mergeStateStatus="CLEAN", statusCheckRollup=[])
+        clock_c = _FakeClock()
+        fake_c = FakeCli(self.ORIGIN, gh=[(0, clean_empty, "")])
+        got_c = self.run_with(fake_c, lambda: f.forge_wait(
+            self.repo, 42, timeout_s=60, interval_s=15,
+            monotonic=clock_c.monotonic, sleep=clock_c.sleep))
+        self.assertEqual(got_c["state"], "ready")
+        self.assertEqual(clock_c.sleeps, [])
+
     def test_merge_succeeds_and_confirms_commit(self):
         after = json.dumps({"state": "MERGED", "headRefOid": self.HEAD,
                             "mergeCommit": {"oid": self.MERGE_SHA}})
@@ -604,6 +640,26 @@ class GitLabWaitAndMergeTests(ForgeTestCase):
         self.assertEqual(got["running_checks"], ["pipeline (running)"])
         self.assertIn("deadline reached", got["reason"])
         self.assertEqual(clock.sleeps, [10.0, 10.0])
+
+    def test_wait_missing_pipeline_grace_period(self):
+        no_pipe = as_read("mr-readiness-green", "/merge_requests/14", lambda mr: mr.update(head_pipeline=None))
+        # No head pipeline at start, then green pipeline appears: ends ready.
+        clock = _FakeClock()
+        fake = FakeCli(GITLAB_ORIGIN, glab=[no_pipe, fixture("mr-readiness-green"), fixture("project-squash-default")])
+        got = self.run_with(fake, lambda: f.forge_wait(
+            self.repo, 14, timeout_s=300, interval_s=15, monotonic=clock.monotonic, sleep=clock.sleep))
+        self.assertEqual(got["state"], "ready")
+        self.assertEqual(clock.sleeps, [15.0])
+
+        # No head pipeline past grace period: ends blocked with existing reason.
+        clock2 = _FakeClock()
+        fake2 = FakeCli(GITLAB_ORIGIN, glab=[no_pipe, fixture("project-squash-default")])
+        got2 = self.run_with(fake2, lambda: f.forge_wait(
+            self.repo, 14, timeout_s=300, interval_s=25, monotonic=clock2.monotonic, sleep=clock2.sleep))
+        self.assertEqual(got2["state"], "blocked")
+        self.assertEqual(got2["reason"], "pipeline missing")
+        self.assertEqual(sum(clock2.sleeps), f._WAIT_NO_CI_GRACE_S)
+        self.assertEqual(clock2.sleeps, [25.0, 25.0, 25.0, 15.0])
 
     def test_merge_succeeds_and_refuses_moved_head_409(self):
         merge_ok = {**fixture("land-merge"), "env": {"GITLAB_HOST": "localhost:8929"}}
