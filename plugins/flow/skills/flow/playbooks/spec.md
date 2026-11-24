@@ -2,7 +2,11 @@
 
 ## Writing
 
-Before writing under `.flow/specs/`, check existing specs across branches with one git command and compare matches by reading. Use `templates/spec.md` beside the router unless the repo has a root `SPEC.md`, which wins. Read `STRATEGY.md` and any repo glossary (whatever its name) when present, turning any conflict with direction or terms into an open question. When a term is first settled with no glossary, offer to create a root `GLOSSARY.md` holding that one term—only on first need with the person's yes. Read existing decision files and record new decisions in the repo's form; otherwise `## Decision Context` is the record, and do not create a decisions directory.
+A spec's id is its title as a short slug, prefixed with the tracker key when it comes from an issue, and never a number; the file is `<id>.md`. Before writing, check existing specs with one git command across branches and both spec folders, and compare matches by reading. An id is used once: on a clash, add a distinguishing word.
+
+Finished specs live in `.flow/specs/`; a spec waiting on the default branch for its work lives in `.flow/specs/open/`. Write a spec that ships in the same PR as its work straight to `.flow/specs/`, so nothing ever moves. Put a spec in `open/` only when it reaches the default branch before its work is complete (a spec-only PR, a backlog, a goal's parent). Read open or finished from the default branch, never from a feature branch, and refer to a spec by id, not by path.
+
+Use `templates/spec.md` beside the router unless the repo has a root `SPEC.md`, which wins. Read `STRATEGY.md` and any repo glossary (whatever its name) when present, turning any conflict with direction or terms into an open question. When a term is first settled with no glossary, offer to create a root `GLOSSARY.md` holding that one term—only on first need with the person's yes. Read existing decision files and record new decisions in the repo's form; otherwise `## Decision Context` is the record, and do not create a decisions directory.
 
 When intent cannot yet be stated as criteria, draft the spec with its open questions as the decisions and settle those first. Split only by independently shippable outcome, not by size. Tag any requirement the person did not state as `[inferred]`, and keep requirement IDs append-only: a changed requirement gets a new ID.
 
