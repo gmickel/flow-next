@@ -32,7 +32,14 @@ def body_snapshot_hash(body: Optional[str]) -> str:
 
 
 def spec_path(flow_dir: Path, spec_id: str) -> Path:
-    return Path(flow_dir) / "specs" / f"{spec_id}.md"
+    specs = Path(flow_dir) / "specs"
+    root = specs / f"{spec_id}.md"
+    if root.is_file() or root.is_symlink():
+        return root
+    opened = specs / "open" / f"{spec_id}.md"
+    if opened.is_file() or opened.is_symlink():
+        return opened
+    return root
 
 
 def _unquote(raw: str) -> Optional[str]:
@@ -224,14 +231,22 @@ def write_spec_tracker(path: Path, tracker: dict[str, Any],
 
 
 def iter_spec_trackers(flow_dir: Path):
-    """Yield (spec_id, tracker_dict) across `.flow/specs/*.md`."""
+    """Yield (spec_id, tracker_dict) across `.flow/specs/` and `.flow/specs/open/`."""
     specs = Path(flow_dir) / "specs"
     if not specs.is_dir():
         return
-    for path in sorted(specs.glob("*.md")):
-        loaded = load_spec_doc(path)
-        if isinstance(loaded, TrackerError):
+    seen: set[str] = set()
+    for folder in (specs, specs / "open"):
+        if folder.is_symlink() or not folder.is_dir():
             continue
-        data, _body = loaded
-        tracker = data.get("tracker")
-        yield str(data.get("id") or path.stem), (tracker if isinstance(tracker, dict) else {})
+        for path in sorted(folder.glob("*.md")):
+            loaded = load_spec_doc(path)
+            if isinstance(loaded, TrackerError):
+                continue
+            data, _body = loaded
+            sid = str(data.get("id") or path.stem)
+            if sid in seen:
+                continue
+            seen.add(sid)
+            tracker = data.get("tracker")
+            yield sid, (tracker if isinstance(tracker, dict) else {})

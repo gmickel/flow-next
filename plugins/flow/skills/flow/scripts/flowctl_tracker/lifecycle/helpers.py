@@ -33,7 +33,12 @@ def validate_spec_id(spec_id) -> Optional[TrackerError]:
     return None
 
 
-def leaf_is_safe(base_dir: Path, leaf: Path) -> Optional[TrackerError]:
+SPEC_SUBDIRS = frozenset({"open"})
+
+
+def leaf_is_safe(base_dir: Path, leaf: Path, *,
+                 allowed_subdirs: Optional[frozenset[str]] = None
+                 ) -> Optional[TrackerError]:
     """Containment + no-follow, mirroring flowctl's _flow_leaf_is_safe policy:
     the leaf must resolve INSIDE base_dir and no component below base_dir may
     be a symlink (a committed symlink at `.flow/create-first` or a spec leaf
@@ -61,9 +66,21 @@ def leaf_is_safe(base_dir: Path, leaf: Path) -> Optional[TrackerError]:
         # Windows raises ValueError across drives - a different drive is an escape.
         return TrackerError(ErrorClass.INVALID_INPUT,
                             f"{leaf} escapes {base_dir}", subtype="path")
-    if ".." in Path(rel).parts:
+    parts = Path(rel).parts
+    if ".." in parts:
         return TrackerError(ErrorClass.INVALID_INPUT,
                             f"{leaf} escapes {base_dir}", subtype="path")
+    if allowed_subdirs is not None:
+        if len(parts) == 1 and parts[0] != ".":
+            pass
+        elif len(parts) == 2 and parts[0] in allowed_subdirs:
+            pass
+        else:
+            return TrackerError(
+                ErrorClass.INVALID_INPUT,
+                f"{leaf} is outside allowed layout under {base_dir}",
+                subtype="path",
+            )
     probe = leaf
     while True:
         try:
@@ -238,7 +255,8 @@ def load_spec(flow_dir: Path, spec_id: str) -> Union[tuple[Path, dict], TrackerE
     if bad:
         return bad
     path = spec_path(flow_dir, spec_id)
-    unsafe = leaf_is_safe(Path(flow_dir) / "specs", path)
+    unsafe = leaf_is_safe(Path(flow_dir) / "specs", path,
+                          allowed_subdirs=SPEC_SUBDIRS)
     if unsafe:
         return unsafe
     if not path.is_file():
