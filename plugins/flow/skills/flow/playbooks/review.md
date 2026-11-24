@@ -4,17 +4,21 @@
 
 Send review to another model family through `orchestrate.md`. If a named reviewer cannot be reached, stop and say so; never substitute a reviewer silently. When no preference is stated and no other family is reachable, the same family reviews and that fact goes on the PR's review line. A reviewer from the builder's own vendor, the builder's own model included, is a same-family review wherever its name appeared; never report it as another family.
 
-On the first round of a change review, use one reviewer when the change is small, stays in one area, and touches no shared state, concurrency, security, or data layout. Otherwise dispatch three reviewers in parallel, one lens each: **correctness**, **contracts**, and **integration**.
+Decide how much review a change gets by its risk and reach, not its size. A change to output, wording, display, or documentation alone is not reviewed: say so and why. A small change in one area that touches no persisted or shared state, concurrency, security, or data layout gets one reviewer. Anything else gets three reviewers in parallel on the first round, one lens each: **correctness**, **contracts**, and **integration**. A spec or instruction that asks for review is followed whatever the size.
 
 Fill in the context header of `reviewer-brief.md` beside the router (intent, out of scope, check results, mechanical commits to skip) and pass it with the commit range or spec path. Do not paste the diff; the reviewer reads the repository. After a review returns, verify the working tree is unchanged, untracked files included, since read-only is an instruction rather than tool enforcement. A reviewer that returns no verdict has not reviewed: read its error output, fix the dispatch or take the next route, and say plainly when no review happened.
 
-## Fix loop
+## Findings
 
-Check every finding: fix it, or decline it with a reason. Any finding without a failing scenario is FYI. Never write a verdict yourself, and do not agree just to end the loop. If review has grown the diff, cut before adding.
+Fix a finding only when it shows the change does the wrong thing in a scenario the request covers. Hardening, extra shutdown or error paths, wider refactors, style, and problems that were there before the change are follow-ups: list them in the hand-off as plain facts, and do not offer to fold them in. When a finding points at machinery the change added that nobody asked for, remove it; if review has grown the diff, cut before adding. Any finding without a failing scenario is FYI. Decline a finding with a reason. Never write a verdict yourself, and do not agree just to end the loop.
 
-Record fixed and declined findings by id (`S1`, `S2`, ...) and the reviewer's verdict in each fix commit message; that commit count is the round count, with no other record. Continue later rounds in the same reviewer session wherever the harness can resume it; otherwise pass a fresh reviewer the findings ledger from the commit messages.
+Record fixed and declined findings by id (`S1`, `S2`, ...) and the reviewer's verdict in each fix commit message; that commit count is the round count, with no other record.
 
-Stop at eight rounds as a hard cap—reaching it is not approval; end the loop and hand the open findings to the person. Escalate any item disputed twice to the person. `MAJOR_RETHINK` stops the loop; `NEEDS_HUMAN` goes to the person.
+## Rounds
+
+When a person is waiting, hand the result back first, in its own message, then run the review in the background and report its verdict, and any fix, when it lands. Where the host cannot wake the session when the review finishes, wait for it instead. After fixing, re-review once, with one reviewer looking at the fixes, in the same reviewer session wherever the harness can resume it, and stop there: give the person any findings that remain, with the reviewer's reasons. Later fixes, including ones the person asks for, get focused tests, not another review. A PR waits for the verdict.
+
+Unattended, or when asked to review until SHIP, loop. Each later round is one reviewer checking that earlier findings are fixed or rightly declined; it holds the change back only for a new serious problem the fixes introduced. Where a session cannot be resumed, pass a fresh reviewer the findings ledger from the commit messages. Stop at eight rounds as a hard cap—reaching it is not approval; end the loop and hand the open findings to the person. Escalate any item disputed twice to the person. `MAJOR_RETHINK` stops the loop; `NEEDS_HUMAN` goes to the person.
 
 ## Other review routes
 
