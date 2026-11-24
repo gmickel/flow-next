@@ -8,7 +8,7 @@ import sys
 import unittest
 from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "skills" / "flow" / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "plugins" / "flow" / "skills" / "flow" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from flowctl_tracker.wire import WIRE_VERBS  # noqa: E402

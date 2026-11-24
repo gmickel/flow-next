@@ -17,8 +17,8 @@ from unittest.mock import patch
 from flowctl_test_support import FLOWCTL_CMD
 
 TESTS = Path(__file__).resolve().parent
-SCRIPTS = TESTS.parent / "skills" / "flow" / "scripts"
-sys.path.insert(0, str(TESTS.parent / "skills" / "flow" / "scripts"))
+SCRIPTS = TESTS.parents[1] / "plugins" / "flow" / "skills" / "flow" / "scripts"
+sys.path.insert(0, str(TESTS.parents[1] / "plugins" / "flow" / "skills" / "flow" / "scripts"))
 spec = importlib.util.spec_from_file_location("flowctl_forge_test", SCRIPTS / "forge.py")
 f = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = f

@@ -19,7 +19,7 @@ from test_forge import f
 from test_forge_bitbucket import ORIGIN, BktCli, branch_argv
 
 TESTS = Path(__file__).resolve().parent
-SCRIPTS = TESTS.parent / "skills" / "flow" / "scripts"
+SCRIPTS = TESTS.parents[1] / "plugins" / "flow" / "skills" / "flow" / "scripts"
 PREFLIGHT = SCRIPTS / "make-pr-preflight.sh"
 HELPER = SCRIPTS / "make-pr-bitbucket.sh"
 CREATE = SCRIPTS / "make-pr-create.sh"

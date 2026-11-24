@@ -18,7 +18,7 @@ from flowctl_test_support import git
 from test_forge import GITLAB_ORIGIN, FakeCli, f
 
 TESTS = Path(__file__).resolve().parent
-SCRIPTS = TESTS.parent / "skills" / "flow" / "scripts"
+SCRIPTS = TESTS.parents[1] / "plugins" / "flow" / "skills" / "flow" / "scripts"
 PREFLIGHT = SCRIPTS / "make-pr-preflight.sh"
 HELPER = SCRIPTS / "make-pr-gitlab.sh"
 CREATE = SCRIPTS / "make-pr-create.sh"

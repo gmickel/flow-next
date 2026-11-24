@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 TESTS = Path(__file__).resolve().parent
-ROOT = TESTS.parent
+ROOT = TESTS.parents[1] / "plugins" / "flow"
 sys.path.insert(0, str(ROOT / "skills" / "flow" / "scripts"))
 sys.path.insert(0, str(TESTS))
 

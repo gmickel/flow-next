@@ -14,7 +14,7 @@ from test_forge_bitbucket import ORIGIN
 from test_make_pr_bitbucket import BitbucketShellCase, answers, recorded
 
 TESTS = Path(__file__).resolve().parent
-SCRIPTS = TESTS.parent / "skills" / "flow" / "scripts" / "resolve-pr"
+SCRIPTS = TESTS.parents[1] / "plugins" / "flow" / "skills" / "flow" / "scripts" / "resolve-pr"
 PULLS = "/repositories/flownextnew/flownext/pullrequests"
 OPEN_THREAD, GENERAL, SETTLED = 901784115, 901784108, 901784139   # the recorded comment ids
 

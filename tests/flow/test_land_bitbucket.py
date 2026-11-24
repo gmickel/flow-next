@@ -15,7 +15,7 @@ from unittest.mock import patch
 from test_forge_bitbucket import BktCli, ForgeTestCase, derived, f, fixture, under
 from test_make_pr_bitbucket import BitbucketShellCase, answers, recorded
 
-SKILLS = Path(__file__).resolve().parent.parent / "skills"
+SKILLS = Path(__file__).resolve().parents[2] / "plugins" / "flow" / "skills"
 REPO = "/repositories/flownextnew/flownext"
 READY = "588b25c02a5b1146783bae0b703caeba417af6a4"     # pull request 10's head
 CHANGES = "32568a47f92cfe6173017b8a11628b2e3c3791b6"   # pull request 11's head

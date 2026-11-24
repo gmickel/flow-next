@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'plugins/flow/**'
+      - 'tests/flow/**'
       - '.github/workflows/test-flow.yml'
   pull_request:
     paths:
       - 'plugins/flow/**'
+      - 'tests/flow/**'
       - '.github/workflows/test-flow.yml'
 
 jobs:
@@ -37,4 +39,4 @@ jobs:
           git config --global init.defaultBranch main
 
       - name: Run unit tests
-        run: python -m unittest discover -s plugins/flow/tests -p "test_*.py" -v
+        run: python -m unittest discover -s tests/flow -p "test_*.py" -v
