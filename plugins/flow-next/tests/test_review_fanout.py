@@ -1657,26 +1657,58 @@ class TestReviewFanout(unittest.TestCase):
 
     def test_empty_needs_work_does_not_override_malformed_findings(self) -> None:
         by_axis = {axis: "NEEDS_WORK" for axis in flowctl.REVIEW_FANOUT_AXES}
-        code, dispatch, err = self._dispatch(self._verdict_exec(by_axis))
+        receipt = self.root / "malformed-empty-merge-receipt.json"
+        code, dispatch, err = self._dispatch(
+            self._verdict_exec(by_axis), "--receipt", str(receipt),
+        )
         self.assertEqual(code, 0, err)
-        malformed = (
-            "No findings.\n\n"
-            "## Issue 1\n"
-            "- **Severity**: P1\n"
-            "- **Confidence**: 100\n"
-            "- **Classification**: invalid\n"
-            "- **Problem**: This finding is malformed.\n"
-            "<verdict>NEEDS_WORK</verdict>\n"
-        )
-        code, out, err = self._run(
-            "codex", "impl-review-fanout-finalize", self.task_id, "--base", "HEAD~1",
-            "--rid", dispatch["rid"], "--merged-file", str(self._write_merged(malformed)),
-            "--needs-work-survivors", "0", "--json",
-        )
-        self.assertEqual(code, 2, out + err)
-        self.assertIn("did not parse", out + err)
-        self.assertEqual(self._pending(), 1)
-        self.assertFalse(self._attempts())
+        invalid_documents = {
+            "invalid classification enum": (
+                "No findings.\n\n"
+                "## Issue 1\n"
+                "- **Severity**: P1\n"
+                "- **Confidence**: 100\n"
+                "- **Classification**: invalid\n"
+                "- **Problem**: This finding is malformed.\n"
+                "<verdict>NEEDS_WORK</verdict>\n"
+            ),
+            "finding heading without severity": (
+                "No findings.\n\n"
+                "## Issue 1\n"
+                "- **Confidence**: 100\n"
+                "- **Classification**: introduced\n"
+                "- **Problem**: This finding has no severity.\n"
+                "<verdict>NEEDS_WORK</verdict>\n"
+            ),
+            "malformed optional tally": (
+                "No findings.\n\n"
+                "```json\n"
+                '{"classification_counts":{"introduced": nope,"pre_existing":0},'
+                '"unaddressed":[],"suppressed_count":{}}\n'
+                "```\n\n"
+                "<verdict>NEEDS_WORK</verdict>\n"
+            ),
+            "nonzero optional tally": (
+                "No findings.\n\n"
+                "```json\n"
+                '{"classification_counts":{"introduced":1,"pre_existing":0},'
+                '"unaddressed":[],"suppressed_count":{}}\n'
+                "```\n\n"
+                "<verdict>NEEDS_WORK</verdict>\n"
+            ),
+        }
+        for label, review in invalid_documents.items():
+            with self.subTest(label=label):
+                code, out, err = self._run(
+                    "codex", "impl-review-fanout-finalize", self.task_id, "--base", "HEAD~1",
+                    "--rid", dispatch["rid"], "--merged-file", str(self._write_merged(review)),
+                    "--needs-work-survivors", "0", "--json",
+                )
+                self.assertEqual(code, 2, out + err)
+                self.assertIn("did not parse", out + err)
+                self.assertEqual(self._pending(), 1)
+                self.assertFalse(self._attempts())
+                self.assertFalse(receipt.exists())
 
     def test_empty_needs_work_requires_matching_verdict_tag(self) -> None:
         by_axis = {axis: "NEEDS_WORK" for axis in flowctl.REVIEW_FANOUT_AXES}

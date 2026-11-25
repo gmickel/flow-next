@@ -51245,6 +51245,37 @@ def _review_fanout_render_merge_plan(meta: dict, args) -> tuple[str, int]:
     return "\n\n".join(parts) + "\n", len(survivors)
 
 
+def _review_fanout_empty_needs_work_document_valid(review_text: str) -> bool:
+    """Check the complete raw document before allowing an empty NEEDS_WORK parse."""
+    match = re.fullmatch(
+        r"\s*No findings\.\s*"
+        r"(?:```json\s*(?P<tally>\{[^`]*\})\s*```\s*)?"
+        r"<verdict>NEEDS_WORK</verdict>\s*",
+        review_text,
+    )
+    if match is None:
+        return False
+    raw_tally = match.group("tally")
+    if raw_tally is None:
+        return True
+    try:
+        tally = json.loads(raw_tally)
+    except (ValueError, RecursionError):
+        return False
+    if (
+        not isinstance(tally, dict)
+        or set(tally) != {"classification_counts", "unaddressed", "suppressed_count"}
+        or not _review_json_block_schema_ok(tally)
+    ):
+        return False
+    counts = tally.get("classification_counts")
+    return (
+        isinstance(counts, dict)
+        and set(counts) == {"introduced", "pre_existing"}
+        and all(type(value) is int and value == 0 for value in counts.values())
+    )
+
+
 def cmd_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     """Phase-two fan-out finalize (fn-215 R14).
 
@@ -51317,6 +51348,7 @@ def cmd_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         and has_needs_work_draw
         and needs_work_survivors == 0
         and merged_tag == "NEEDS_WORK"
+        and _review_fanout_empty_needs_work_document_valid(merged_text)
     )
     merged_tag_mismatch: Optional[str] = None
     if merged_tag in _REVIEW_REPLAY_PRECEDENCE and merged_tag != verdict:
