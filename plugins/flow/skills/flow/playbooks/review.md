@@ -4,7 +4,9 @@
 
 Send review to another model family through `orchestrate.md`. If a named reviewer cannot be reached, stop and say so; never substitute a reviewer silently. When no preference is stated and no other family is reachable, the same family reviews and that fact goes on the PR's review line. A reviewer from the builder's own vendor, the builder's own model included, is a same-family review wherever its name appeared; never report it as another family.
 
-Decide how much review a change gets by its risk and reach, not its size. A change to output, wording, display, or documentation alone is not reviewed: say so and why. A small change in one area that touches no persisted or shared state, concurrency, security, or data layout gets one reviewer. Anything else gets three reviewers in parallel on the first round, one lens each: **correctness**, **contracts**, and **integration**. A spec or instruction that asks for review is followed whatever the size.
+Decide whether a change is reviewed by its risk, not its size. Review every change that touches persisted or shared state, concurrency, security, data layout or migrations, and every multi-file feature. A small local fix to output, wording or display is not reviewed: say so and why. A spec or instruction that asks for review is followed whatever the size.
+
+When a review runs, the first round uses one reviewer for a small change in one area that touches none of those, and three in parallel otherwise, one lens each: **correctness**, **contracts**, and **integration**.
 
 Fill in the context header of `reviewer-brief.md` beside the router (intent, out of scope, check results, mechanical commits to skip) and pass it with the commit range or spec path. Do not paste the diff; the reviewer reads the repository. After a review returns, verify the working tree is unchanged, untracked files included, since read-only is an instruction rather than tool enforcement. A reviewer that returns no verdict has not reviewed: read its error output, fix the dispatch or take the next route, and say plainly when no review happened.
 
