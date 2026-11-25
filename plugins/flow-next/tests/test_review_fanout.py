@@ -1696,6 +1696,14 @@ class TestReviewFanout(unittest.TestCase):
                 "```\n\n"
                 "<verdict>NEEDS_WORK</verdict>\n"
             ),
+            "negative optional suppression count": (
+                "No findings.\n\n"
+                "```json\n"
+                '{"classification_counts":{"introduced":0,"pre_existing":0},'
+                '"unaddressed":[],"suppressed_count":{"50":-1}}\n'
+                "```\n\n"
+                "<verdict>NEEDS_WORK</verdict>\n"
+            ),
         }
         for label, review in invalid_documents.items():
             with self.subTest(label=label):
