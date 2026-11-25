@@ -5811,6 +5811,7 @@ def _parse_review_findings_v1(
     supersedes_receipt_id: Optional[str],
     prior_findings: Optional[dict],
     anchor_side: Optional[str],
+    allow_empty_needs_work: bool = False,
     parse_status: dict,
 ) -> Optional[dict]:
     def fail(reason: str, block: Optional[int] = None) -> None:
@@ -5959,19 +5960,33 @@ def _parse_review_findings_v1(
     ):
         return fail("invalid-prior-reference")
 
+    explicit_empty_marker = re.search(
+        r"""(?ix)
+        \b(?:no\s+(?:blocking\s+)?findings?|found\s+no\s+correctness|
+        no\s+blocking\s+gaps|(?:no|zero|0)\s+introduced(?:\s+findings?)?|introduced(?:\s+findings?)?\s*[:=]\s*0|review\s+result:\s*no\s+findings?)\b
+        """,
+        output,
+    )
+    # Only impl-review fan-out finalization opts in, after checking the draws,
+    # merged tag, and zero-survivor count. Keep its merged prose canonical.
+    explicit_empty_needs_work = bool(
+        allow_empty_needs_work is True
+        and review_kind == "implementation"
+        and re.search(r"(?m)^\s*No findings\.\s*$", output)
+    )
     explicit_empty = bool(
-        re.search(
-            r"""(?ix)
-            \b(?:no\s+(?:blocking\s+)?findings?|found\s+no\s+correctness|
-            no\s+blocking\s+gaps|(?:no|zero|0)\s+introduced(?:\s+findings?)?|introduced(?:\s+findings?)?\s*[:=]\s*0|review\s+result:\s*no\s+findings?)\b
-            """,
-            output,
-        )
-        # An empty review is an all-clear only under SHIP: that catches a reviewer writing
-        # NEEDS_WORK and listing nothing. QA's text is written by `qa receipt` from validated
-        # JSON, and QA can end short of SHIP with no findings (a criterion nobody could drive
+        explicit_empty_marker
+        # An empty review is ordinarily an all-clear only under SHIP, which
+        # catches a reviewer writing NEEDS_WORK and listing nothing. The
+        # fan-out finalizer's gated zero-survivor opt-in is the only exception.
+        # QA's text is written by `qa receipt` from validated JSON, and QA can
+        # end short of SHIP with no findings (a criterion nobody could drive
         # live, a BLOCKED run), so for QA an empty result is accepted with any verdict.
-        and (review_kind == "qa" or re.search(r"<verdict>\s*SHIP\s*</verdict>", output, re.IGNORECASE))
+        and (
+            review_kind == "qa"
+            or re.search(r"<verdict>\s*SHIP\s*</verdict>", output, re.IGNORECASE)
+            or explicit_empty_needs_work
+        )
     )
     # fn-168: an aggregate all-clear IS a prior-finding record for PRESENCE
     # purposes. It is matched separately from the canonical per-ordinal regex
@@ -6050,13 +6065,16 @@ def parse_review_findings(
     supersedes_receipt_id: Optional[str] = None,
     prior_findings: Optional[dict] = None,
     anchor_side: Optional[str] = None,
+    allow_empty_needs_work: bool = False,
     schema_version: int = _FINDINGS_SCHEMA_VERSION,
     parse_status: Optional[dict] = None,
 ) -> Optional[dict]:
     """Parse reviewer prose into the additive v1 findings container.
 
     Unsupported versions, unknown enums, over-limit data, and unparseable
-    prose return ``None``. The public boundary intentionally never raises.
+    prose return ``None``. ``allow_empty_needs_work`` is reserved for the
+    implementation-review fan-out finalizer after its zero-survivor gate. The
+    public boundary intentionally never raises.
     """
     if parse_status is None:
         parse_status = {}
@@ -6078,6 +6096,7 @@ def parse_review_findings(
             supersedes_receipt_id=supersedes_receipt_id,
             prior_findings=prior_findings,
             anchor_side=anchor_side,
+            allow_empty_needs_work=allow_empty_needs_work,
         )
         container = _parse_review_findings_v1(
             output, parse_status=parse_status, **arguments
@@ -6233,6 +6252,7 @@ def build_review_receipt_findings(
     base_sha: Optional[str] = None,
     prior_receipt_path: Optional[Path] = None,
     anchor_side: Optional[str] = "head",
+    allow_empty_needs_work: bool = False,
 ) -> Optional[dict]:
     """Build the optional findings field while receipt inputs are already held.
 
@@ -6275,6 +6295,7 @@ def build_review_receipt_findings(
         supersedes_receipt_id=supersedes,
         prior_findings=prior,
         anchor_side=anchor_side,
+        allow_empty_needs_work=allow_empty_needs_work,
     )
 
 
@@ -46768,6 +46789,7 @@ def _build_backend_review_findings(
     reviewed_head_sha: Optional[str],
     reviewed_base_sha: Optional[str],
     base_branch: Optional[str],
+    allow_empty_needs_work: bool = False,
 ) -> tuple[Optional[dict], Optional[dict]]:
     """Build the one container shared by receipt publication and attempt state."""
     head_sha = reviewed_head_sha or _resolve_review_sha("HEAD")
@@ -46788,6 +46810,7 @@ def _build_backend_review_findings(
             base_sha=base_sha,
             prior_receipt_path=lineage_path,
             anchor_side="head",
+            allow_empty_needs_work=allow_empty_needs_work,
         )
         return built, (
             build_review_findings_digest(built, prior_receipt_path=lineage_path)
@@ -51280,6 +51303,21 @@ def cmd_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
             code=2,
         )
     merged_tag = parse_codex_verdict(merged_text)
+    # The parser normally accepts empty findings only for SHIP (except the
+    # validated QA path). A NEEDS_WORK fan-out may also be legitimately empty
+    # after the coordinator's evidence gate drops every finding, but only the
+    # explicit zero-survivor transition can authorize that empty container.
+    needs_work_survivors = getattr(args, "needs_work_survivors", None)
+    has_needs_work_draw = any(
+        isinstance(row, dict) and row.get("verdict") == "NEEDS_WORK"
+        for row in meta_draws
+    )
+    allow_empty_needs_work = bool(
+        verdict == "NEEDS_WORK"
+        and has_needs_work_draw
+        and needs_work_survivors == 0
+        and merged_tag == "NEEDS_WORK"
+    )
     merged_tag_mismatch: Optional[str] = None
     if merged_tag in _REVIEW_REPLAY_PRECEDENCE and merged_tag != verdict:
         # R9 is mechanical worst-wins over the DRAW tags with the zero-survivor
@@ -51317,6 +51355,7 @@ def cmd_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         reviewed_head_sha=meta.get("reviewed_head_sha"),
         reviewed_base_sha=meta.get("reviewed_base_sha"),
         base_branch=args.base,
+        allow_empty_needs_work=allow_empty_needs_work,
     )
     # fn-215 R9: escalate when the evidence gate dropped EVERY finding of
     # every NEEDS_WORK draw — per-draw, not whole-container: SHIP-draw
@@ -51329,7 +51368,6 @@ def cmd_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     # distinguish NEEDS_WORK-draw survivors from SHIP-draw remainder, so the
     # old approximation could silently mask the wedge). All-SHIP rounds have
     # no wedge and need no count.
-    needs_work_survivors = getattr(args, "needs_work_survivors", None)
     if findings_container is None:
         # PR #392 sol review (R3/R14): EVERY finalized merged round carries a
         # schema-valid v1 container — round 2's ratchet injects every merged
@@ -51361,10 +51399,6 @@ def cmd_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     # (deep passes finding what no draw did) has no NEEDS_WORK draws, so
     # there is nothing for the survivor count to distinguish and a truthful
     # 0 must not wedge the brand-new finding into NEEDS_HUMAN.
-    has_needs_work_draw = any(
-        isinstance(row, dict) and row.get("verdict") == "NEEDS_WORK"
-        for row in meta_draws
-    )
     if (
         needs_work_survivors is None
         and verdict == "NEEDS_WORK"
