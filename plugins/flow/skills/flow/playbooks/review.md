@@ -8,7 +8,7 @@ Decide whether a change is reviewed by its risk, not its size. Review every chan
 
 When a review runs, the first round uses one reviewer for a small change in one area that touches none of those, and three in parallel otherwise, one lens each: **correctness**, **contracts**, and **integration**.
 
-Fill in the context header of `reviewer-brief.md` beside the router (intent, out of scope, check results, mechanical commits to skip) and pass it with the commit range or spec path. Do not paste the diff; the reviewer reads the repository. After a review returns, verify the working tree is unchanged, untracked files included, since read-only is an instruction rather than tool enforcement. A reviewer that returns no verdict has not reviewed: read its error output, fix the dispatch or take the next route, and say plainly when no review happened.
+Fill in the context header of `reviewer-brief.md` beside the router (intent, what the request says must stay as it is in the person's own words, out of scope, check results, mechanical commits to skip) and pass it with the commit range or spec path. Do not paste the diff; the reviewer reads the repository. After a review returns, verify the working tree is unchanged, untracked files included, since read-only is an instruction rather than tool enforcement. A reviewer that returns no verdict has not reviewed: read its error output, fix the dispatch or take the next route, and say plainly when no review happened.
 
 ## Findings
 

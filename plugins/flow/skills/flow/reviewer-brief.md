@@ -22,6 +22,8 @@ Read the spec first as the contract this change is judged against. Review this c
 3. **Security holes** the change opens.
 4. **Overengineering in what this change added**: machinery, options, abstractions or code paths the request does not need. Report these as nit with what to remove; never ask for more.
 
+Then take each line under **Must stay as it is** in the context. Read it as the person wrote it, not as the spec or the writer's summary restates it, and compare what a user or caller sees before and after the change. Any difference is a blocker, whether or not the writer disclosed it; the fix is the smallest change that restores it.
+
 Do not review style, naming, DRY, architecture taste, or hardening beyond what the request needs (extra shutdown paths, retries, timeouts, monitoring). Mention such observations as FYI at most.
 
 Every blocking finding names a concrete failing scenario: this input or state, this wrong result. A finding that cannot name one is FYI.
@@ -54,6 +56,7 @@ When assigned a lens, focus your attention there without excusing a blocker seen
 
 - **Kind:** `change | spec | goal-final`
 - **Intent and spec path:** `<what this is for; spec path or none>`
+- **Must stay as it is:** `<each thing the request says must not change, quoted in the person's own words; or none>`
 - **Range or target:** `<base..head or spec path>`
 - **Lens:** `<correctness | contracts | integration | full>`
 - **Out of scope:** `<explicit boundaries>`
