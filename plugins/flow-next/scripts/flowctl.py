@@ -51268,6 +51268,8 @@ def _review_fanout_empty_needs_work_document_valid(review_text: str) -> bool:
         or not _review_json_block_schema_ok(tally)
     ):
         return False
+    if any(value < 0 for value in tally["suppressed_count"].values()):
+        return False
     counts = tally.get("classification_counts")
     return (
         isinstance(counts, dict)

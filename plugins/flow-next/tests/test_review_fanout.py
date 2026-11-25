@@ -1599,7 +1599,10 @@ class TestReviewFanout(unittest.TestCase):
         code, dispatch, err = self._dispatch(fake, "--receipt", str(receipt))
         self.assertEqual(code, 0, err)
         plan = self.root / "empty-merge.json"
-        plan.write_text(json.dumps({"keep": []}), encoding="utf-8")
+        plan.write_text(
+            json.dumps({"keep": [], "suppressed_count": {"50": 1}}),
+            encoding="utf-8",
+        )
         code, out, err = self._run(
             "codex", "impl-review-fanout-finalize", self.task_id, "--base", "HEAD~1",
             "--rid", dispatch["rid"], "--merge-plan", str(plan), "--json",
@@ -1608,6 +1611,7 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(code, flowctl.REVIEW_CAP_EXIT_CODE, out + err)
         self.assertEqual(result.get("verdict"), "NEEDS_HUMAN")
         self.assertEqual(result.get("needs_work_survivors"), 0)
+        self.assertEqual(result.get("suppressed_count"), {"50": 1})
         self.assertEqual(result.get("review", "").splitlines()[0], "No findings.")
         self.assertIn("<verdict>NEEDS_WORK</verdict>", result.get("review", ""))
         self.assertEqual(self._pending(), 0)
@@ -1615,6 +1619,7 @@ class TestReviewFanout(unittest.TestCase):
         stored = json.loads(receipt.read_text(encoding="utf-8"))
         self.assertEqual(stored["verdict"], "NEEDS_HUMAN")
         self.assertEqual(stored["findings"]["items"], [])
+        self.assertEqual(stored["suppressed_count"], {"50": 1})
         self.assertEqual(stored["review"], result["review"])
 
     def test_legacy_empty_needs_work_requires_an_explicit_declaration(self) -> None:
