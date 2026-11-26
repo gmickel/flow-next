@@ -2,7 +2,7 @@
 
 An unattended run (`--auto`) never asks. Consent is the invocation naming the item, or the tracker's ready state when configured; with neither, stop as `NO_WORK`.
 
-Build, review, and open the PR without confirmation. Land it only when the invocation asked for through merge and a person authorised it. When asked for one step per invocation, run the next stage once and stop.
+Build, review as much as `review.md` decides for this change, and open the PR without confirmation. A change `review.md` leaves unreviewed is unreviewed here too, and the PR says so and why. Land it only when the invocation asked for through merge and a person authorised it. When asked for one step per invocation, run the next stage once and stop.
 
 When a person is needed, post why on the issue or PR, move the item out of the tracker's ready state at once, and stop. On a transient failure, change nothing and end as `BLOCKED` so retrying is safe; keep no attempt counter.
 
