@@ -66,7 +66,7 @@ When assigned a lens, focus your attention there without excusing a blocker seen
 
 ## Closing and verdict
 
-Inspect the repository directly for the context above, report findings by stable id (`S1`, `S2`, ...), give the head commit of the range you reviewed in full on a line of its own as `Reviewed: <40 hex>`, and end with exactly one verdict tag on the final line:
+Inspect the repository directly for the context above, report findings by stable id (`S1`, `S2`, ...), for a change review give the head commit of the range you reviewed in full on a line of its own as `Reviewed: <40 hex>`, and end with exactly one verdict tag on the final line:
 
 - `<verdict>SHIP</verdict>` — ready to proceed; no blocker or `should` findings remain and stated requirements are met.
 - `<verdict>NEEDS_WORK</verdict>` — blocker or `should` findings, or an unaddressed requirement, must be fixed.
