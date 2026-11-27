@@ -1,6 +1,6 @@
 # Pull Request
 
-Commit any spec on the same branch as the code before opening. When this PR completes a spec that sits in `.flow/specs/open/`, move it to `.flow/specs/` with `git mv` in a commit of its own, and fix any reference to the old path inside the repository in that commit. Do this before opening the PR, never while landing. Write the PR body directly, and never overwrite a body a person edited without asking.
+Commit any spec on the same branch as the code before opening. When this PR completes a spec that sits in `.flow/specs/open/` or `.flow/specs/parked/`, move it to `.flow/specs/` with `git mv` in a commit of its own, and fix any reference to the old path inside the repository in that commit. Do this before opening the PR, never while landing. Write the PR body directly, and never overwrite a body a person edited without asking.
 
 ## Body layout
 
@@ -14,7 +14,7 @@ Use these headings in order, omitting `## Shape` or `## Tradeoffs` when empty; a
 - `## Reading order` — logical review groups with safe-to-skim groups separated; no file lists and no line totals.
 - `## Tradeoffs` — rejected alternatives and decisions made.
 
-Under `## What changes`, describe the behaviour changes and state each spec requirement as met with evidence, deferred with a reason, or unmet (placing deferred and unmet items under `## Needs you`; this is a reporting target, so still open the PR). Name any unrequested changes explicitly and include live proof evidence (or "not verified live" for direct changes). List project documents mentioning touched files or names, updating each or explaining why not so none is left false. Close the section with one line naming the building model, the reviewing model (same or different family), the verdict, rounds, and findings declined.
+Under `## What changes`, describe the behaviour changes and state each spec requirement as met with evidence, deferred with a reason, or unmet (placing deferred and unmet items under `## Needs you`; this is a reporting target, so still open the PR). Name any unrequested changes explicitly and include live proof evidence (or "not verified live" for direct changes). List project documents mentioning touched files or names, updating each or explaining why not so none is left false. Close the section with one line naming the building model, the reviewing model (same or different family), the verdict, rounds, and findings declined, then the `Flow-Review:` lines from `review.md`, one per round, each on its own line, unchanged.
 
 ## Mechanical changes and opening
 

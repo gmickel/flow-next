@@ -33,7 +33,7 @@ def validate_spec_id(spec_id) -> Optional[TrackerError]:
     return None
 
 
-SPEC_SUBDIRS = frozenset({"open"})
+SPEC_SUBDIRS = frozenset({"open", "parked"})
 
 
 def leaf_is_safe(base_dir: Path, leaf: Path, *,

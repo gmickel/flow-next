@@ -1,4 +1,4 @@
-"""Spec folder lookup (.flow/specs/ and .flow/specs/open/) and path safety."""
+"""Spec folder lookup (.flow/specs/, .flow/specs/open/, and .flow/specs/parked/) and path safety."""
 
 from __future__ import annotations
 
@@ -69,7 +69,22 @@ class SpecFolderTests(unittest.TestCase):
         both_root = _write_spec(self.specs / "both-present.md", "both-present")
         self.assertEqual(SS.spec_path(self.flow, "both-present"), both_root)
 
-    def test_iter_spec_trackers_yields_from_both_folders(self) -> None:
+        # Only in parked/ -> returns parked/ path.
+        parked_file = _write_spec(self.specs / "parked" / "only-parked.md", "only-parked")
+        self.assertEqual(SS.spec_path(self.flow, "only-parked"), parked_file)
+
+        # In open/ and parked/ -> open/ wins.
+        _write_spec(self.specs / "parked" / "open-and-parked.md", "open-and-parked")
+        open_wins = _write_spec(self.specs / "open" / "open-and-parked.md", "open-and-parked")
+        self.assertEqual(SS.spec_path(self.flow, "open-and-parked"), open_wins)
+
+        # In root, open/, and parked/ -> root wins.
+        _write_spec(self.specs / "parked" / "all-three.md", "all-three")
+        _write_spec(self.specs / "open" / "all-three.md", "all-three")
+        root_wins = _write_spec(self.specs / "all-three.md", "all-three")
+        self.assertEqual(SS.spec_path(self.flow, "all-three"), root_wins)
+
+    def test_iter_spec_trackers_yields_from_all_folders(self) -> None:
         _write_spec(
             self.specs / "finished-slug.md", "finished-slug",
             tracker_id="ID_ROOT", identifier="#10", url="https://example.test/10",
@@ -78,16 +93,28 @@ class SpecFolderTests(unittest.TestCase):
             self.specs / "open" / "open-slug.md", "open-slug",
             tracker_id="ID_OPEN", identifier="#11", url="https://example.test/11",
         )
-        # Duplicate id across folders: root wins, no second entry yielded.
+        _write_spec(
+            self.specs / "parked" / "parked-slug.md", "parked-slug",
+            tracker_id="ID_PARKED", identifier="#12", url="https://example.test/12",
+        )
+        # Duplicate ids across folders: root beats open beats parked.
         _write_spec(
             self.specs / "open" / "finished-slug.md", "finished-slug",
             tracker_id="ID_STALE", identifier="#99", url="https://example.test/99",
+        )
+        _write_spec(
+            self.specs / "parked" / "open-slug.md", "open-slug",
+            tracker_id="ID_PARKED_STALE", identifier="#98", url="https://example.test/98",
         )
 
         found = list(SS.iter_spec_trackers(self.flow))
         self.assertEqual(
             [(sid, tr.get("id")) for sid, tr in found],
-            [("finished-slug", "ID_ROOT"), ("open-slug", "ID_OPEN")],
+            [
+                ("finished-slug", "ID_ROOT"),
+                ("open-slug", "ID_OPEN"),
+                ("parked-slug", "ID_PARKED"),
+            ],
         )
 
     def test_status_in_review_works_for_spec_in_open_folder(self) -> None:
@@ -148,9 +175,13 @@ class SpecFolderTests(unittest.TestCase):
         self.assertIsNone(
             leaf_is_safe(self.specs, self.specs / "open" / "a.md", allowed_subdirs=SPEC_SUBDIRS),
         )
+        self.assertIsNone(
+            leaf_is_safe(self.specs, self.specs / "parked" / "a.md", allowed_subdirs=SPEC_SUBDIRS),
+        )
 
         for bad in (
             self.specs / "open" / "nested" / "x.md",
+            self.specs / "parked" / "nested" / "x.md",
             self.specs / "other" / "x.md",
             self.specs / ".." / "victim.md",
             self.tmp / "outside.md",
@@ -165,12 +196,15 @@ class SpecFolderTests(unittest.TestCase):
         outside.mkdir()
         try:
             (self.specs / "open").symlink_to(outside, target_is_directory=True)
+            (self.specs / "parked").symlink_to(outside, target_is_directory=True)
         except (OSError, NotImplementedError):
             self.skipTest("symlinks unavailable on this platform")
-        err = leaf_is_safe(self.specs, self.specs / "open" / "x.md", allowed_subdirs=SPEC_SUBDIRS)
-        self.assertIsInstance(err, TrackerError)
-        self.assertIs(err.cls, ErrorClass.INVALID_INPUT)
-        self.assertEqual(err.subtype, "path")
+        for sub in ("open", "parked"):
+            with self.subTest(symlink_subdir=sub):
+                err = leaf_is_safe(self.specs, self.specs / sub / "x.md", allowed_subdirs=SPEC_SUBDIRS)
+                self.assertIsInstance(err, TrackerError)
+                self.assertIs(err.cls, ErrorClass.INVALID_INPUT)
+                self.assertEqual(err.subtype, "path")
 
 
 if __name__ == "__main__":

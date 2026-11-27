@@ -4,7 +4,7 @@ Convert a repository from Flow-Next Classic to Flow as one reviewable change on 
 
 ## Specs and open work
 
-For each spec under `.flow/specs/`, copy identity fields from its JSON twin (`id`, `title`, and where present `tracker` with `id`, `identifier`, and `url`) into YAML frontmatter at the top of the markdown file, leaving the body unchanged. The JSON twin is then no longer needed. Classic keeps open specs beside finished ones. Using each twin's status, move the open specs to `.flow/specs/open/` with `git mv` and no content change, leave finished specs where they are, and report every file in the repository that cites a moved path.
+For each spec under `.flow/specs/`, copy identity fields from its JSON twin (`id`, `title`, where present `tracker` with `id`, `identifier`, and `url`, and a non-empty `depends_on_epics` as `after`) into YAML frontmatter at the top of the markdown file, leaving the body unchanged. The JSON twin is then no longer needed. Classic keeps open specs beside finished ones. Using each twin's status, move the open specs with `git mv` and no content change: those Classic marked ready to `.flow/specs/open/`, the rest to `.flow/specs/parked/`. Leave finished specs where they are, say which spec went where, and report every file in the repository that cites a moved path.
 
 Check `.flow/tasks/` for unfinished tasks on open specs and move what remains into the spec in the person's words so open work is not silently lost.
 
