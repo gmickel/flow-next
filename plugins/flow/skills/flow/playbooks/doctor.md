@@ -1,6 +1,6 @@
 # Doctor
 
-Check this person's setup on this machine by running each tool's own commands and reporting what you observed. No code in this plugin detects hosts, harnesses, or models.
+Check this person's setup on this machine by running each tool's own commands and reporting what you observed. Use only commands that report and return on their own, such as a version or a login status; never start a sign-in or anything that waits for a person, and say what you could not check without one. No code in this plugin detects hosts, harnesses, or models.
 
 Ask once what the person does if their role is not already stated in this session or their personal instruction file. With no role stated anywhere, Flow behaves as for a developer. Check only what their role needs:
 

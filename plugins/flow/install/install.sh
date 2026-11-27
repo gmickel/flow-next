@@ -1,11 +1,11 @@
 #!/bin/sh
 # Copy the self-contained Flow-Next One (preview) skill folder for hosts without a
-# marketplace install: opencode, muse, or antigravity. Leaves shared
+# marketplace install: opencode, muse, antigravity, or pi. Leaves shared
 # directories untouched.
 set -eu
 
 usage() {
-    echo "Usage: $0 <opencode|muse|antigravity> [dest]" >&2
+    echo "Usage: $0 <opencode|muse|antigravity|pi> [dest]" >&2
     exit 1
 }
 
@@ -20,6 +20,7 @@ case "$HOST" in
     opencode)    [ -n "$DEST" ] || DEST="${XDG_CONFIG_HOME:-$HOME/.config}/opencode" ;;
     muse)        [ -n "$DEST" ] || DEST="${XDG_CONFIG_HOME:-$HOME/.config}/muse" ;;
     antigravity) [ -n "$DEST" ] || DEST="$HOME/.gemini/config/plugins/flow" ;;
+    pi)          [ -n "$DEST" ] || DEST="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" ;;
     -h|--help)   usage ;;
     *)           echo "Unknown host: $HOST" >&2; usage ;;
 esac
