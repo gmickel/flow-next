@@ -6,7 +6,7 @@ Trackers are optional and linking is explicit: do nothing here unless configured
 
 Before build start, the issue is the source where people discuss. At build start, snapshot it into the spec (`spec.md`); the spec file is the contract from then on. To link an existing issue, read it and write its durable `id`, `identifier`, and `url` into spec frontmatter. If the issue changes after the snapshot, ask the person—never merge them. Work that starts from a tracker issue always has a linked spec, however small the change: without one the snapshot check and the status moves have nothing to act on. For a small change the spec is its frontmatter and its criteria and nothing more: no goal section, no copy of the issue, no boundaries or decision sections. Move the issue to in progress when the build starts.
 
-Flow writes back only status moves, owner questions, un-readying when a person is needed, a short merge summary, and an optional one-way spec push at handover. Large specs exceed description limits, so deliver them via PR or `wire attach`.
+Flow writes back only status moves, owner questions, un-readying when a person is needed or a linked spec is parked, a short merge summary, and an optional one-way spec push at handover. Large specs exceed description limits, so deliver them via PR or `wire attach`.
 
 ## Verbs (`edge tracker ...`)
 
