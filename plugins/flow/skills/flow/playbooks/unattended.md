@@ -4,7 +4,7 @@ An unattended run (`--auto`) never asks. Consent is the invocation naming the it
 
 Build, review as much as `review.md` decides for this change, and open the PR without confirmation. A change `review.md` leaves unreviewed is unreviewed here too, and the PR says so and why. Land it only when the invocation asked for through merge and a person authorised it. When asked for one step per invocation, run the next stage once and stop.
 
-When the spec already has work on a remote branch (one that has moved it out of `open/`, or is named for it) and no open pull request, another run is building it: stop as `NO_WORK` and name the branch. Continue only from an open pull request. Never build on a branch another run started, and never force a push the remote rejects: stop as `NEEDS_HUMAN` and name both commits.
+When the spec already has work on a remote branch (one that has moved it out of `open/`, or is named for it) that this checkout does not hold (no local branch at or ahead of it), and no open pull request, another run is building it. Do not start it and do not build on that branch, whatever else says to stay on a branch already doing the work: with the spec named, stop as `NO_WORK` and name the branch; with no item named, take the next ready spec. Look at the remote once more before review, where most of the cost is. Never force a push the remote rejects: stop as `NEEDS_HUMAN` and name both commits.
 
 When a person is needed, post why on the issue or PR, move the item out of the tracker's ready state at once, and stop. On a transient failure, change nothing and end as `BLOCKED` so retrying is safe; keep no attempt counter.
 
