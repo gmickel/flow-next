@@ -30,7 +30,7 @@ From a checkout of this repository:
 - **Grok Build:** `grok plugin install ./plugins/flow --trust`.
 - **Muse Code:** `muse plugins install ./plugins/flow --scope user`, or `./plugins/flow/install/install.sh muse`.
 - **Cursor:** copy `./plugins/flow` to `~/.cursor/plugins/local/flow` and restart, or `--plugin-dir ./plugins/flow` for one session.
-- **OpenCode, Antigravity CLI:** `./plugins/flow/install/install.sh <opencode|antigravity>`.
+- **OpenCode, Antigravity CLI, pi:** `./plugins/flow/install/install.sh <opencode|antigravity|pi>`. On pi, for one repository only, link `plugins/flow/skills/flow` into that repository's `.agents/skills/` instead and start pi with project files trusted.
 - **Factory Droid:** add this repository as a marketplace and install `flow@flow-next` (not yet tried).
 
 ## If Flow is not being picked up
@@ -50,12 +50,14 @@ Plain words work on every host. Where a host loads stage aliases:
 | Cursor | `/flow-go`, `/flow-land`, … (`/flow:` also accepted) |
 | Codex | `$flow` or plain words |
 | OpenCode, Muse Code, Antigravity CLI | Plain words via `flow` |
+| pi | `/skill:flow`, or plain words |
 
 ## Host notes
 
 - **Codex:** a non-interactive run needs a mode where git writes and the network are allowed. In the workspace-write sandbox it cannot create a branch; an interactive session asks for approval instead.
+- **pi:** it cannot tell the model which other tools it can reach, so a run spends time finding out how to start a reviewer. Naming the review command in the instruction file avoids most of that. It has no way to wake a session, so a review runs before the hand-back, not after it.
 - **Trackers:** Flow moves a linked issue to in progress, in review and done. If your tracker has more than one "started" state, say which one means in review when you link it.
 
 ## Exercised hosts
 
-On Claude Code, Codex, Cursor, OpenCode, Grok, Muse and Antigravity the plugin has taken a real change through a fix, a test and a review by another model. Claude Code has had the most use, including tracker-linked and unattended runs through merge. Factory Droid and Windows have not been tried.
+On Claude Code, Codex, Cursor, OpenCode, Grok, Muse, Antigravity and pi the plugin has taken a real change through a fix, a test and a review by another model. Claude Code has had the most use, including tracker-linked and unattended runs through merge. Factory Droid and Windows have not been tried.
