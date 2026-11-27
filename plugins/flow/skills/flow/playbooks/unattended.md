@@ -1,6 +1,6 @@
 # Unattended
 
-An unattended run (`--auto`) never asks. Consent is the invocation naming the item, or the tracker's ready state when configured; with neither, stop as `NO_WORK`. A spec in `.flow/specs/parked/` is started only when the invocation names it or its issue; otherwise never start, move, or ask about it. When an issue picked up only because it was ready leads to a parked spec, a person is needed: say so on the issue with how to start it.
+An unattended run (`--auto`) never asks. Consent is the invocation naming the item, the tracker's ready state when configured, or, with no tracker, a spec waiting in `.flow/specs/open/` on the default branch: take the first ready one in dependency order (`spec.md`). With nothing ready, stop as `NO_WORK`, naming anything blocked by a loop or an unknown id. A spec in `.flow/specs/parked/` is started only when the invocation names it or its issue; otherwise never start, move, or ask about it. When an issue picked up only because it was ready leads to a parked spec, a person is needed: say so on the issue with how to start it.
 
 Build, review as much as `review.md` decides for this change, and open the PR without confirmation. A change `review.md` leaves unreviewed is unreviewed here too, and the PR says so and why. Land it only when the invocation asked for through merge and a person authorised it. When asked for one step per invocation, run the next stage once and stop.
 

@@ -20,7 +20,7 @@ Flow writes back only status moves, owner questions, un-readying when a person i
 - `wire comment-add`: post a comment (such as a merge summary).
 - `wire update`: optional one-way spec push.
 - `create` / `create-first`: create and link an issue (optional `--parent`), or before a local spec.
-- `relate`: relate two linked specs (`blocked-by`).
+- `relate`: relate two linked specs (`blocked-by`); run it for each id in a linked spec's `after` when that line is written or changed.
 - `idea read` / `idea parent` / `idea link`: discovery ideas (below).
 
 ## Discovery ideas

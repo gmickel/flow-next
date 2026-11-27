@@ -9,6 +9,7 @@ title: <title>
 #   snapshot: "sha256:<hash>"
 # repos:
 #   - <repo>
+# after: [<spec-id>, ...]   # specs that must be finished before this one starts; one line
 ---
 
 ## Goal
