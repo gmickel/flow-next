@@ -66,7 +66,7 @@ When assigned a lens, focus your attention there without excusing a blocker seen
 
 ## Closing and verdict
 
-Inspect the repository directly for the context above, report findings by stable id (`S1`, `S2`, ...), and end with exactly one verdict tag on the final line:
+Inspect the repository directly for the context above, report findings by stable id (`S1`, `S2`, ...), give the head commit of the range you reviewed in full on a line of its own as `Reviewed: <40 hex>`, and end with exactly one verdict tag on the final line:
 
 - `<verdict>SHIP</verdict>` — ready to proceed; no blocker or `should` findings remain and stated requirements are met.
 - `<verdict>NEEDS_WORK</verdict>` — blocker or `should` findings, or an unaddressed requirement, must be fixed.
@@ -77,5 +77,7 @@ Example ending:
 
 - **S1 (should) `src/auth.py:42`:** Passing an empty token raises an unhandled error instead of returning unauthorized; check for empty input before splitting.
 - **S2 (nit) `src/auth.py:18`:** `retry_budget` is unused by any caller; remove it.
+
+Reviewed: <40 hex>
 
 <verdict>NEEDS_WORK</verdict>

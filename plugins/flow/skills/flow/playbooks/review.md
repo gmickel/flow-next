@@ -14,7 +14,11 @@ Fill in the context header of `reviewer-brief.md` beside the router (intent, wha
 
 Fix a finding only when it shows the change does the wrong thing in a scenario the request covers. Hardening, extra shutdown or error paths, wider refactors, style, and problems that were there before the change are follow-ups: list them in the hand-off as plain facts, and do not offer to fold them in. When a finding points at machinery the change added that nobody asked for, remove it; if review has grown the diff, cut before adding. Any finding without a failing scenario is FYI. Decline a finding with a reason. Never write a verdict yourself, and do not agree just to end the loop.
 
-Record fixed and declined findings by id (`S1`, `S2`, ...) and the reviewer's verdict in each fix commit message; that commit count is the round count, with no other record.
+Record fixed and declined findings by id (`S1`, `S2`, ...) in each fix commit message. Each round also leaves one line, the same wherever it is written:
+
+`Flow-Review: <reviewed commit, 40 hex> <VERDICT> round=<n> by=<vendor>/<model> family=<other|same> lenses=<returned>/<asked> declined=<ids or ->`
+
+The commit is the head the reviewer read, in full; with several reviewers the verdict is the most severe (`MAJOR_RETHINK`, then `NEEDS_HUMAN`, then `NEEDS_WORK`, then `SHIP`), and `lenses` counts the reviewers that returned a verdict out of those asked. A change the dispatch rule leaves unreviewed gets `Flow-Review: <head, 40 hex> UNREVIEWED` and nothing more. Put a round's line last in the commit that fixes its findings, and every round's line, in order, in the PR body; a round that ends in `SHIP` has no commit, so its line lives in the PR body alone. The highest `round=` is the round count, with no other record.
 
 ## Rounds
 
