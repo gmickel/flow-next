@@ -39,6 +39,9 @@ def spec_path(flow_dir: Path, spec_id: str) -> Path:
     opened = specs / "open" / f"{spec_id}.md"
     if opened.is_file() or opened.is_symlink():
         return opened
+    parked = specs / "parked" / f"{spec_id}.md"
+    if parked.is_file() or parked.is_symlink():
+        return parked
     return root
 
 
@@ -231,12 +234,12 @@ def write_spec_tracker(path: Path, tracker: dict[str, Any],
 
 
 def iter_spec_trackers(flow_dir: Path):
-    """Yield (spec_id, tracker_dict) across `.flow/specs/` and `.flow/specs/open/`."""
+    """Yield (spec_id, tracker_dict) across `.flow/specs/`, `.flow/specs/open/`, and `.flow/specs/parked/`."""
     specs = Path(flow_dir) / "specs"
     if not specs.is_dir():
         return
     seen: set[str] = set()
-    for folder in (specs, specs / "open"):
+    for folder in (specs, specs / "open", specs / "parked"):
         if folder.is_symlink() or not folder.is_dir():
             continue
         for path in sorted(folder.glob("*.md")):
