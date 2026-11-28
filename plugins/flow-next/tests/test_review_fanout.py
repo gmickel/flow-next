@@ -1590,6 +1590,154 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(result["needs_work_survivors"], 0)
         self.assertEqual(result["pre_existing_count"], 1)
 
+    def test_merge_plan_empty_needs_work_escalates_without_losing_receipt(self) -> None:
+        def fake(prompt, **kwargs):
+            axis = _axis_of(prompt)
+            return _merged_review(f"Finding {axis}"), f"sess-{axis}", 0, ""
+
+        receipt = self.root / "empty-merge-receipt.json"
+        code, dispatch, err = self._dispatch(fake, "--receipt", str(receipt))
+        self.assertEqual(code, 0, err)
+        plan = self.root / "empty-merge.json"
+        plan.write_text(
+            json.dumps({"keep": [], "suppressed_count": {"50": 1}}),
+            encoding="utf-8",
+        )
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", self.task_id, "--base", "HEAD~1",
+            "--rid", dispatch["rid"], "--merge-plan", str(plan), "--json",
+        )
+        result = self._payload(out) if out.strip() else {}
+        self.assertEqual(code, flowctl.REVIEW_CAP_EXIT_CODE, out + err)
+        self.assertEqual(result.get("verdict"), "NEEDS_HUMAN")
+        self.assertEqual(result.get("needs_work_survivors"), 0)
+        self.assertEqual(result.get("suppressed_count"), {"50": 1})
+        self.assertEqual(result.get("review", "").splitlines()[0], "No findings.")
+        self.assertIn("<verdict>NEEDS_WORK</verdict>", result.get("review", ""))
+        self.assertEqual(self._pending(), 0)
+        self.assertEqual(self._rounds(), 1)
+        stored = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(stored["verdict"], "NEEDS_HUMAN")
+        self.assertEqual(stored["findings"]["items"], [])
+        self.assertEqual(stored["suppressed_count"], {"50": 1})
+        self.assertEqual(stored["review"], result["review"])
+
+    def test_legacy_empty_needs_work_requires_an_explicit_declaration(self) -> None:
+        by_axis = {
+            "correctness": "NEEDS_WORK",
+            "contracts": "NEEDS_WORK",
+            "integration": "SHIP",
+        }
+        code, dispatch, err = self._dispatch(self._verdict_exec(by_axis))
+        self.assertEqual(code, 0, err)
+        merged = "No findings.\n<verdict>NEEDS_WORK</verdict>\n"
+        marker_free = "<verdict>NEEDS_WORK</verdict>\n"
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", self.task_id, "--base", "HEAD~1",
+            "--rid", dispatch["rid"], "--merged-file", str(self._write_merged(marker_free)),
+            "--needs-work-survivors", "0", "--json",
+        )
+        self.assertEqual(code, 2, out + err)
+        self.assertIn("did not parse", out + err)
+        self.assertEqual(self._pending(), 1)
+        self.assertFalse(self._attempts())
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", self.task_id, "--base", "HEAD~1",
+            "--rid", dispatch["rid"], "--merged-file", str(self._write_merged(merged)),
+            "--needs-work-survivors", "1", "--json",
+        )
+        self.assertEqual(code, 2, out + err)
+        self.assertIn("did not parse", out + err)
+        self.assertEqual(self._pending(), 1)
+        self.assertFalse(self._attempts())
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", self.task_id, "--base", "HEAD~1",
+            "--rid", dispatch["rid"], "--merged-file", str(self._write_merged(merged)),
+            "--needs-work-survivors", "0", "--json",
+        )
+        result = self._payload(out) if out.strip() else {}
+        self.assertEqual(code, flowctl.REVIEW_CAP_EXIT_CODE, out + err)
+        self.assertEqual(result.get("verdict"), "NEEDS_HUMAN")
+        self.assertEqual(result.get("needs_work_survivors"), 0)
+
+    def test_empty_needs_work_does_not_override_malformed_findings(self) -> None:
+        by_axis = {axis: "NEEDS_WORK" for axis in flowctl.REVIEW_FANOUT_AXES}
+        receipt = self.root / "malformed-empty-merge-receipt.json"
+        code, dispatch, err = self._dispatch(
+            self._verdict_exec(by_axis), "--receipt", str(receipt),
+        )
+        self.assertEqual(code, 0, err)
+        invalid_documents = {
+            "invalid classification enum": (
+                "No findings.\n\n"
+                "## Issue 1\n"
+                "- **Severity**: P1\n"
+                "- **Confidence**: 100\n"
+                "- **Classification**: invalid\n"
+                "- **Problem**: This finding is malformed.\n"
+                "<verdict>NEEDS_WORK</verdict>\n"
+            ),
+            "finding heading without severity": (
+                "No findings.\n\n"
+                "## Issue 1\n"
+                "- **Confidence**: 100\n"
+                "- **Classification**: introduced\n"
+                "- **Problem**: This finding has no severity.\n"
+                "<verdict>NEEDS_WORK</verdict>\n"
+            ),
+            "malformed optional tally": (
+                "No findings.\n\n"
+                "```json\n"
+                '{"classification_counts":{"introduced": nope,"pre_existing":0},'
+                '"unaddressed":[],"suppressed_count":{}}\n'
+                "```\n\n"
+                "<verdict>NEEDS_WORK</verdict>\n"
+            ),
+            "nonzero optional tally": (
+                "No findings.\n\n"
+                "```json\n"
+                '{"classification_counts":{"introduced":1,"pre_existing":0},'
+                '"unaddressed":[],"suppressed_count":{}}\n'
+                "```\n\n"
+                "<verdict>NEEDS_WORK</verdict>\n"
+            ),
+            "negative optional suppression count": (
+                "No findings.\n\n"
+                "```json\n"
+                '{"classification_counts":{"introduced":0,"pre_existing":0},'
+                '"unaddressed":[],"suppressed_count":{"50":-1}}\n'
+                "```\n\n"
+                "<verdict>NEEDS_WORK</verdict>\n"
+            ),
+        }
+        for label, review in invalid_documents.items():
+            with self.subTest(label=label):
+                code, out, err = self._run(
+                    "codex", "impl-review-fanout-finalize", self.task_id, "--base", "HEAD~1",
+                    "--rid", dispatch["rid"], "--merged-file", str(self._write_merged(review)),
+                    "--needs-work-survivors", "0", "--json",
+                )
+                self.assertEqual(code, 2, out + err)
+                self.assertIn("did not parse", out + err)
+                self.assertEqual(self._pending(), 1)
+                self.assertFalse(self._attempts())
+                self.assertFalse(receipt.exists())
+
+    def test_empty_needs_work_requires_matching_verdict_tag(self) -> None:
+        by_axis = {axis: "NEEDS_WORK" for axis in flowctl.REVIEW_FANOUT_AXES}
+        code, dispatch, err = self._dispatch(self._verdict_exec(by_axis))
+        self.assertEqual(code, 0, err)
+        empty_with_wrong_tag = "No findings.\n<verdict>MAJOR_RETHINK</verdict>\n"
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", self.task_id, "--base", "HEAD~1",
+            "--rid", dispatch["rid"], "--merged-file", str(self._write_merged(empty_with_wrong_tag)),
+            "--needs-work-survivors", "0", "--json",
+        )
+        self.assertEqual(code, 2, out + err)
+        self.assertIn("did not parse", out + err)
+        self.assertEqual(self._pending(), 1)
+        self.assertFalse(self._attempts())
+
     def test_merge_plan_pre_existing_from_needs_work_draw_is_not_a_survivor(self) -> None:
         def fake(prompt, **kwargs):
             axis = _axis_of(prompt)

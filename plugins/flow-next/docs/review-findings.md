@@ -342,9 +342,14 @@ The `findings` field is additive and optional:
 - Valid but stale field: show it as stale evidence; never as current state.
 - Unsupported version, invalid field, or ambiguous lineage: ignore the
   structured projection and retain the receipt plus prose.
-- Explicit empty `items`: means the parser recognized a no-findings `SHIP`
-  response for that generation. It is not equivalent to a missing or rejected
-  container.
+- Explicit empty `items`: usually means the parser recognized a no-findings
+  `SHIP` response for that generation. Implementation-review fan-out can also
+  produce an empty container when the complete merged review is the canonical
+  `No findings.` form (optionally with a valid zero classification tally), ends
+  with a `NEEDS_WORK` verdict tag, and the coordinator reports zero surviving
+  findings from `NEEDS_WORK` draws. That round is recorded as `NEEDS_HUMAN`; use
+  the receipt's top-level verdict rather than infer `SHIP` from empty items. An
+  empty container is not equivalent to a missing or rejected container.
 
 Fallback must be labeled when a consumer presents a structured view. Never
 merge fields from a stale/invalid container with prose or another generation
